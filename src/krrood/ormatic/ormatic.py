@@ -11,8 +11,10 @@ from typing_extensions import Optional, TextIO
 
 from .custom_types import TypeType
 from .dao import AlternativeMapping
+from .rdf_generator import RDFGenerator
 from .sqlalchemy_generator import SQLAlchemyGenerator
 from .utils import InheritanceStrategy, module_and_class_name
+from .wrapped_ontology import WrappedOntology
 from .wrapped_table import WrappedTable
 from ..class_diagrams.class_diagram import (
     ClassDiagram,
@@ -85,12 +87,20 @@ class ORMatic:
     The wrapped tables instances for the SQLAlchemy conversion.
     """
 
+    wrapped_ontologies: Dict[WrappedClass, WrappedOntology] = field(
+        default_factory=dict, init=False
+    )
+    """
+    The wrapped ontologies instances for RDF conversion.
+    """
+
     def __post_init__(self):
         self.type_mappings[Type] = TypeType
         self.imported_modules.add(Type.__module__)
         self._create_inheritance_graph()
         self._add_alternative_mappings_to_class_diagram()
         self._create_wrapped_tables()
+        self._create_wrapped_ontologies()
 
         for wrapped_table in self.wrapped_tables.values():
             self.imported_modules.add(wrapped_table.wrapped_clazz.clazz.__module__)
@@ -107,6 +117,23 @@ class ORMatic:
             else:
                 # add the class normally
                 self.wrapped_tables[wrapped_clazz] = WrappedTable(
+                    wrapped_clazz=wrapped_clazz, ormatic=self
+                )
+
+    def _create_wrapped_ontologies(self):
+        """
+        Create wrapped ontologies for RDF generation.
+        """
+        for wrapped_clazz in self.wrapped_classes_in_topological_order:
+            # check if the class has an alternative mapping
+            if alternative_mapping := self.get_alternative_mapping(wrapped_clazz):
+                # add the alternative mapping
+                self.wrapped_ontologies[wrapped_clazz] = WrappedOntology(
+                    wrapped_clazz=alternative_mapping, ormatic=self
+                )
+            else:
+                # add the class normally
+                self.wrapped_ontologies[wrapped_clazz] = WrappedOntology(
                     wrapped_clazz=wrapped_clazz, ormatic=self
                 )
 
@@ -199,3 +226,14 @@ class ORMatic:
         """
         sqlalchemy_generator = SQLAlchemyGenerator(self)
         sqlalchemy_generator.to_sqlalchemy_file(file)
+
+    def to_rdf_file(self, file: TextIO, namespace: str, format: str = "turtle"):
+        """
+        Generate RDF ontology from the ORMatic models.
+
+        :param file: The file to write to
+        :param namespace: Base URI for the ontology
+        :param format: RDF serialization format (turtle, rdf/xml, n3, etc.)
+        """
+        rdf_generator = RDFGenerator(self, namespace=namespace, format=format)
+        rdf_generator.to_rdf_file(file)
