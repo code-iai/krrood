@@ -19,6 +19,7 @@ import datetime
 import krrood.entity_query_language.orm.model
 import krrood.entity_query_language.predicate
 import krrood.entity_query_language.symbol_graph
+import krrood.ormatic.alternative_mappings
 import krrood.ormatic.custom_types
 import test.dataset.example_classes
 import test.dataset.semantic_world_like_classes
@@ -35,6 +36,27 @@ class Base(DeclarativeBase):
         test.dataset.example_classes.PhysicalObject: test.dataset.example_classes.ConceptType,
         typing.Type: krrood.ormatic.custom_types.TypeType,
     }
+
+
+class CallableMappingDAO(
+    Base, DataAccessObject[krrood.ormatic.alternative_mappings.CallableMapping]
+):
+
+    __tablename__ = "CallableMappingDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    module_name: Mapped[builtins.str] = mapped_column(
+        String(255), use_existing_column=True
+    )
+    function_name: Mapped[builtins.str] = mapped_column(
+        String(255), use_existing_column=True
+    )
+    class_name: Mapped[typing.Optional[builtins.str]] = mapped_column(
+        String(255), use_existing_column=True
+    )
 
 
 class CallableWrapperDAO(

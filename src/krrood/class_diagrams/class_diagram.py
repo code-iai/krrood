@@ -511,7 +511,7 @@ class ClassDiagram:
         added to the relations list.
         """
         for clazz in self.wrapped_classes:
-            for superclass in clazz.clazz.__bases__:
+            for superclass in getattr(clazz.clazz, "__bases__", []):
                 try:
                     source = self.get_wrapped_class(superclass)
                 except ClassIsUnMappedInClassDiagram:

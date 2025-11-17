@@ -20,6 +20,7 @@ from krrood.ormatic.dao import AlternativeMapping
 from krrood.ormatic.ormatic import ORMatic
 from krrood.ormatic.utils import classes_of_module
 from krrood.ormatic.utils import drop_database
+from krrood.ormatic.alternative_mappings import CallableMapping  # type: ignore
 from krrood.utils import recursive_subclasses
 from .dataset import example_classes
 from .dataset.example_classes import (
@@ -50,12 +51,8 @@ def generate_sqlalchemy_interface():
     all_classes = {c.clazz for c in symbol_graph._class_diagram.wrapped_classes}
     # Collect originals of alternative mappings once so we can preserve them
     alt_originals = {
-        original
-        for original in (
-            alternative_mapping.original_class()
-            for alternative_mapping in recursive_subclasses(AlternativeMapping)
-        )
-        if isinstance(original, type)
+        alternative_mapping.original_class()
+        for alternative_mapping in recursive_subclasses(AlternativeMapping)
     }
     all_classes |= alt_originals
     all_classes |= set(classes_of_module(krrood.entity_query_language.symbol_graph))
@@ -70,13 +67,10 @@ def generate_sqlalchemy_interface():
     all_classes = {
         c
         for c in all_classes
-        if (
-            isinstance(c, type)
-            and is_dataclass(c)
-            and not issubclass(c, AlternativeMapping)
-        )
-        or c in alt_originals
+        if (is_dataclass(c) and not issubclass(c, AlternativeMapping))
     }
+
+    all_classes |= {Callable}
 
     class_diagram = ClassDiagram(
         list(sorted(all_classes, key=lambda c: c.__name__, reverse=True))
