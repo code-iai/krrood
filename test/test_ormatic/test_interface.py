@@ -517,5 +517,6 @@ def test_callable_mapping(session, database):
     assert obj.func() == 1
 
     dao = to_dao(obj)
+
     from_dao = dao.from_dao()
     assert from_dao.func() == 1
