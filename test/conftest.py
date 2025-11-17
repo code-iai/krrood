@@ -2,6 +2,7 @@ import logging
 import os
 import traceback
 from dataclasses import is_dataclass
+from typing import Callable
 
 import pytest
 from sqlalchemy import create_engine
@@ -47,10 +48,16 @@ def generate_sqlalchemy_interface():
 
     # collect all classes that need persistence
     all_classes = {c.clazz for c in symbol_graph._class_diagram.wrapped_classes}
-    all_classes |= {
-        alternative_mapping.original_class()
-        for alternative_mapping in recursive_subclasses(AlternativeMapping)
+    # Collect originals of alternative mappings once so we can preserve them
+    alt_originals = {
+        original
+        for original in (
+            alternative_mapping.original_class()
+            for alternative_mapping in recursive_subclasses(AlternativeMapping)
+        )
+        if isinstance(original, type)
     }
+    all_classes |= alt_originals
     all_classes |= set(classes_of_module(krrood.entity_query_language.symbol_graph))
     all_classes |= set(classes_of_module(example_classes))
     all_classes |= {Symbol}
@@ -59,11 +66,16 @@ def generate_sqlalchemy_interface():
     all_classes -= {HasType, HasTypes, ContainsType}
     all_classes -= {NotMappedParent, ChildNotMapped}
 
-    # only keep dataclasses
+    # only keep dataclasses, EXCEPT keep any class that has an AlternativeMapping
     all_classes = {
         c
         for c in all_classes
-        if is_dataclass(c) and not issubclass(c, AlternativeMapping)
+        if (
+            isinstance(c, type)
+            and is_dataclass(c)
+            and not issubclass(c, AlternativeMapping)
+        )
+        or c in alt_originals
     }
 
     class_diagram = ClassDiagram(
@@ -102,7 +114,10 @@ def pytest_configure(config):
 
 
 def pytest_sessionstart(session):
-    try:
+    generate_sqlalchemy_interface()
+
+
+"""    try:
         generate_sqlalchemy_interface()
     except Exception as e:
         import warnings
@@ -113,7 +128,7 @@ def pytest_sessionstart(session):
             "The Tests may fail or behave inconsistent if the file was not generated correctly."
             f"Error: {e}",
             RuntimeWarning,
-        )
+        )"""
 
 
 from .dataset.ormatic_interface import *

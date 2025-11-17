@@ -1,6 +1,7 @@
 import pytest
 from sqlalchemy import select
 
+from krrood.ormatic.alternative_mappings import CallableMapping
 from ..dataset.example_classes import *
 from ..dataset.ormatic_interface import *
 from krrood.ormatic.dao import (
@@ -477,3 +478,44 @@ def test_to_dao_alternatively_mapped_parent(session, database):
     ch2_dao = to_dao(ch2)
 
     assert ch2_dao == ChildLevel2NormallyMappedDAO("1", 2, 3)
+
+
+def test_callable_alternative_mapping():
+    callable_mapping = CallableMapping.create_instance(module_level_function)
+    reconstructed = callable_mapping.create_from_dao()
+    assert reconstructed() == 1
+
+
+def test_callable_alternative_mapping_instance_method():
+    callable_mapping = CallableMapping.create_instance(
+        CallableWrapper.custom_instanc_method
+    )
+    reconstructed = callable_mapping.create_from_dao()
+    assert reconstructed is CallableWrapper.custom_instanc_method
+
+
+def test_callable_alternative_mapping_class_method():
+    callable_mapping = CallableMapping.create_instance(
+        CallableWrapper.custom_class_method
+    )
+    reconstructed = callable_mapping.create_from_dao()
+    assert reconstructed == CallableWrapper.custom_class_method
+
+
+def test_callable_alternative_mapping_static_method():
+    callable_mapping = CallableMapping.create_instance(
+        CallableWrapper.custom_static_method
+    )
+    reconstructed = callable_mapping.create_from_dao()
+    assert reconstructed is CallableWrapper.custom_static_method
+    assert reconstructed() == 4
+
+
+def test_callable_mapping(session, database):
+
+    obj = CallableWrapper(module_level_function)
+    assert obj.func() == 1
+
+    dao = to_dao(obj)
+    from_dao = dao.from_dao()
+    assert from_dao.func() == 1

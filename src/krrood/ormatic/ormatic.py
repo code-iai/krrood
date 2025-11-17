@@ -19,6 +19,7 @@ from ..class_diagrams.class_diagram import (
     ClassRelation,
     WrappedClass,
 )
+from ..class_diagrams.failures import ClassIsUnMappedInClassDiagram
 from ..class_diagrams.wrapped_field import WrappedField
 
 logger = logging.getLogger(__name__)
@@ -128,12 +129,18 @@ class ORMatic:
         for alternative_mapping in self.alternative_mappings:
             wrapped_alternative_mapping = WrappedClass(clazz=alternative_mapping)
             self.class_dependency_graph.add_node(wrapped_alternative_mapping)
+            # Only add the relation if the original class exists in the class diagram
+            try:
+                target_wrapped = self.class_dependency_graph.get_wrapped_class(
+                    alternative_mapping.original_class()
+                )
+            except ClassIsUnMappedInClassDiagram:
+                # Skip alternative mappings whose originals are not part of the diagram
+                continue
             self.class_dependency_graph.add_relation(
                 AlternativelyMaps(
                     source=wrapped_alternative_mapping,
-                    target=self.class_dependency_graph.get_wrapped_class(
-                        alternative_mapping.original_class()
-                    ),
+                    target=target_wrapped,
                 )
             )
 

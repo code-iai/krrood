@@ -37,6 +37,17 @@ class Base(DeclarativeBase):
     }
 
 
+class CallableWrapperDAO(
+    Base, DataAccessObject[test.dataset.example_classes.CallableWrapper]
+):
+
+    __tablename__ = "CallableWrapperDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+
 class InheritanceBaseWithoutSymbolButAlternativelyMappedMappingDAO(
     Base,
     DataAccessObject[

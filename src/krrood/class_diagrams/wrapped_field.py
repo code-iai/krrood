@@ -180,9 +180,13 @@ class WrappedField:
         if self.is_container:
             return False
         if self.is_optional:
-            return issubclass(self.contained_type, enum.Enum)
+            return inspect.isclass(self.contained_type) and issubclass(
+                self.contained_type, enum.Enum
+            )
 
-        return issubclass(self.resolved_type, enum.Enum)
+        return inspect.isclass(self.resolved_type) and issubclass(
+            self.resolved_type, enum.Enum
+        )
 
     @cached_property
     def is_one_to_one_relationship(self) -> bool:
