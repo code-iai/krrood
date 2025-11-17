@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import _GenericAlias
 from types import FunctionType, MethodType, BuiltinFunctionType
+from collections.abc import Callable as AbcCallable
 
 
 import sqlalchemy.inspection
@@ -907,7 +908,7 @@ def get_alternative_mapping(cls: Type) -> Optional[Type[DataAccessObject]]:
         if alt_mapping.original_class() == cls:
             return alt_mapping
         # Special case: if cls is a function/method type and the alternative mapping is for Callable
-        if alt_mapping.original_class() == Callable:
+        if alt_mapping.original_class() in (Callable, AbcCallable):
             # Check if cls is a callable type (function, method, etc.)
             if cls in (
                 FunctionType,

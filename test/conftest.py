@@ -2,7 +2,7 @@ import logging
 import os
 import traceback
 from dataclasses import is_dataclass
-from typing import Callable
+from collections.abc import Callable
 
 import pytest
 from sqlalchemy import create_engine
