@@ -69,6 +69,16 @@ class CallableWrapperDAO(
         Integer, primary_key=True, use_existing_column=True
     )
 
+    func_id: Mapped[int] = mapped_column(
+        ForeignKey("CallableMappingDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    func: Mapped[CallableMappingDAO] = relationship(
+        "CallableMappingDAO", uselist=False, foreign_keys=[func_id], post_update=True
+    )
+
 
 class InheritanceBaseWithoutSymbolButAlternativelyMappedMappingDAO(
     Base,

@@ -7,6 +7,8 @@ import threading
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import _GenericAlias
+from types import FunctionType, MethodType, BuiltinFunctionType
+
 
 import sqlalchemy.inspection
 import sqlalchemy.orm
@@ -23,6 +25,7 @@ from typing_extensions import (
     Optional,
     List,
     Iterable,
+    Callable,
 )
 
 from ..utils import recursive_subclasses
@@ -330,7 +333,9 @@ class DataAccessObject(HasGeneric[T]):
         """
         if args and not kwargs:
             try:
-                mapper: sqlalchemy.orm.Mapper = sqlalchemy.inspection.inspect(type(self))
+                mapper: sqlalchemy.orm.Mapper = sqlalchemy.inspection.inspect(
+                    type(self)
+                )
                 data_columns = [c for c in mapper.columns if is_data_column(c)]
                 if len(args) == len(data_columns):
                     kwargs = {col.name: value for col, value in zip(data_columns, args)}
@@ -348,14 +353,26 @@ class DataAccessObject(HasGeneric[T]):
         def init_with_positional(self, *args, **kw):
             if args and not kw:
                 try:
-                    mapper: sqlalchemy.orm.Mapper = sqlalchemy.inspection.inspect(type(self))
+                    mapper: sqlalchemy.orm.Mapper = sqlalchemy.inspection.inspect(
+                        type(self)
+                    )
                     data_columns = [c for c in mapper.columns if is_data_column(c)]
                     if len(args) == len(data_columns):
-                        built = {col.name: value for col, value in zip(data_columns, args)}
-                        return original_init(self, **built) if original_init else super(cls, self).__init__(**built)
+                        built = {
+                            col.name: value for col, value in zip(data_columns, args)
+                        }
+                        return (
+                            original_init(self, **built)
+                            if original_init
+                            else super(cls, self).__init__(**built)
+                        )
                 except Exception:
                     pass
-            return original_init(self, *args, **kw) if original_init else super(cls, self).__init__(*args, **kw)
+            return (
+                original_init(self, *args, **kw)
+                if original_init
+                else super(cls, self).__init__(*args, **kw)
+            )
 
         # Inject only if the class did not already define a positional-friendly constructor
         cls.__init__ = init_with_positional
@@ -885,9 +902,20 @@ def get_dao_class(cls: Type) -> Optional[Type[DataAccessObject]]:
 
 @lru_cache(maxsize=None)
 def get_alternative_mapping(cls: Type) -> Optional[Type[DataAccessObject]]:
+
     for alt_mapping in recursive_subclasses(AlternativeMapping):
         if alt_mapping.original_class() == cls:
             return alt_mapping
+        # Special case: if cls is a function/method type and the alternative mapping is for Callable
+        if alt_mapping.original_class() == Callable:
+            # Check if cls is a callable type (function, method, etc.)
+            if cls in (
+                FunctionType,
+                MethodType,
+                BuiltinFunctionType,
+                type(lambda: None),
+            ):
+                return alt_mapping
     return None
 
 

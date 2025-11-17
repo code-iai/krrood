@@ -1,9 +1,9 @@
 import importlib
-import inspect
 from dataclasses import dataclass
 from typing import Self
 
-from typing_extensions import Callable, Optional
+from collections.abc import Callable
+from typing_extensions import Optional
 
 from .dao import AlternativeMapping, T
 

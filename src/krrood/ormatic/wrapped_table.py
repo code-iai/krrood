@@ -3,8 +3,10 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
+from typing import Callable as TypingCallable
+from collections.abc import Callable as AbcCallable
 
-from typing_extensions import List, Dict, TYPE_CHECKING, Optional, Set, Type
+from typing_extensions import List, Dict, TYPE_CHECKING, Optional, Set, Type, get_origin
 
 from .dao import AlternativeMapping
 from .utils import InheritanceStrategy, module_and_class_name
@@ -12,6 +14,7 @@ from ..class_diagrams.class_diagram import (
     WrappedClass,
 )
 from ..class_diagrams.wrapped_field import WrappedField
+from ..class_diagrams.failures import ClassIsUnMappedInClassDiagram
 
 if TYPE_CHECKING:
     from .ormatic import ORMatic
@@ -360,6 +363,29 @@ class WrappedTable:
 
         self.create_mapper_args()
 
+    def is_type_mapped(self, type_to_check: Type) -> bool:
+        """
+        Checks if a type (or its origin if it's a generic) is in mapped_classes.
+        
+        :param type_to_check: The type to check
+        :return: True if the type or its origin is mapped
+        """
+        if type_to_check in self.ormatic.mapped_classes:
+            return True
+        
+        # Check if it's a generic type and if its origin is mapped
+        origin = get_origin(type_to_check)
+        if origin is not None:
+            if origin in self.ormatic.mapped_classes:
+                return True
+            
+            # Special case: get_origin(Callable[[], int]) returns collections.abc.Callable
+            # but typing.Callable might be in mapped_classes instead
+            if origin is AbcCallable and TypingCallable in self.ormatic.mapped_classes:
+                return True
+        
+        return False
+
     def parse_field(self, wrapped_field: WrappedField):
         """
         Parses a given `WrappedField` and determines its type or relationship to create the
@@ -388,7 +414,7 @@ class WrappedTable:
         # handle one to one relationships
         elif (
             wrapped_field.is_one_to_one_relationship
-            and wrapped_field.type_endpoint in self.ormatic.mapped_classes
+            and self.is_type_mapped(wrapped_field.type_endpoint)
         ):
             logger.info(f"Parsing as one to one relationship.")
             self.create_one_to_one_relationship(wrapped_field)
@@ -468,14 +494,34 @@ class WrappedTable:
         :param wrapped_field: The wrapped field to get the table for.
         :return: The wrapped table for the given wrapped field.
         """
+        type_to_lookup = wrapped_field.type_endpoint
+        
         try:
             result = self.ormatic.wrapped_tables[
-                self.ormatic.class_dependency_graph.get_wrapped_class(
-                    wrapped_field.type_endpoint
-                )
+                self.ormatic.class_dependency_graph.get_wrapped_class(type_to_lookup)
             ]
             return result
-        except KeyError:
+        except (KeyError, ClassIsUnMappedInClassDiagram):
+            # Try with the origin type if it's a generic
+            origin = get_origin(type_to_lookup)
+            if origin is not None:
+                try:
+                    result = self.ormatic.wrapped_tables[
+                        self.ormatic.class_dependency_graph.get_wrapped_class(origin)
+                    ]
+                    return result
+                except (KeyError, ClassIsUnMappedInClassDiagram):
+                    # Special case: get_origin(Callable[[], int]) returns collections.abc.Callable
+                    # but typing.Callable might be in the class diagram instead
+                    if origin is AbcCallable:
+                        try:
+                            result = self.ormatic.wrapped_tables[
+                                self.ormatic.class_dependency_graph.get_wrapped_class(TypingCallable)
+                            ]
+                            return result
+                        except (KeyError, ClassIsUnMappedInClassDiagram):
+                            pass
+            
             raise WrappedTableNotFound(
                 type_=wrapped_field.type_endpoint, wrapped_field=wrapped_field
             )
