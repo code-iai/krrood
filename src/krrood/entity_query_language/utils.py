@@ -18,7 +18,7 @@ try:
 except ImportError:
     Source = None
 
-from typing_extensions import Set, Any, List
+from typing_extensions import Set, Any, List, Type
 
 
 class IDGenerator:
@@ -138,6 +138,17 @@ def is_iterable(obj: Any) -> bool:
     :param obj: The object to check.
     """
     return hasattr(obj, "__iter__") and not isinstance(
+        obj, (str, type, bytes, bytearray)
+    )
+
+
+def is_iterable_type(obj: Type) -> bool:
+    """
+    Check if an object type is iterable.
+
+    :param obj: The object to check.
+    """
+    return hasattr(obj, "__iter__") and not issubclass(
         obj, (str, type, bytes, bytearray)
     )
 

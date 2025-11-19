@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from functools import cached_property
+from functools import cached_property, lru_cache
 
 from black.strings import Match
 
 from .hashed_data import T
 from .symbol_graph import SymbolGraph
-from .utils import is_iterable
+from .utils import is_iterable, is_iterable_type
+from ..class_diagrams.wrapped_field import WrappedField
 
 """
 User interface (grammar & vocabulary) for entity query language.
@@ -45,6 +46,7 @@ from .symbolic import (
     Exists,
     Literal,
     ResultQuantifier,
+    Attribute,
 )
 from .result_quantification_constraint import ResultQuantificationConstraint
 
@@ -265,7 +267,9 @@ def not_(operand: SymbolicExpression):
     return operand.__invert__()
 
 
-def contains(container: Union[Iterable, CanBehaveLikeAVariable[T]], item: Any):
+def contains(
+    container: Union[Iterable, CanBehaveLikeAVariable[T]], item: Any
+) -> Comparator:
     """
     Check whether a container contains an item.
 
@@ -367,6 +371,10 @@ class Match(Generic[T]):
     """
     The conditions that define the match.
     """
+    _resolved: bool = field(init=False, default=False)
+    """
+    Whether the match has been resolved.
+    """
 
     def _resolve(self, variable: Optional[CanBehaveLikeAVariable] = None):
         """
@@ -377,13 +385,137 @@ class Match(Generic[T]):
         """
         self.variable = variable if variable else self._create_variable()
         for k, v in self.kwargs.items():
-            attr = getattr(self.variable, k)
-            if isinstance(v, Match):
+            attr: Attribute = getattr(self.variable, k)
+            attr_wrapped_field = attr._wrapped_field_
+            if isinstance(v, Match) and not v._resolved:
+                attr = self._flatten_the_attribute_if_is_iterable_while_value_is_not(
+                    attr, v, attr_wrapped_field
+                )
                 v._resolve(attr)
-                self.conditions.append(HasType(attr, v.type_))
+                self._add_type_filter_if_needed(attr, v, attr_wrapped_field)
                 self.conditions.extend(v.conditions)
             else:
-                self.conditions.append(attr == v)
+                if isinstance(v, Match):
+                    v = v.variable
+                condition = self._get_either_a_containment_or_an_equal_condition(
+                    attr, v, attr_wrapped_field
+                )
+                self.conditions.append(condition)
+        self._resolved = True
+
+    def _get_either_a_containment_or_an_equal_condition(
+        self,
+        attr: Attribute,
+        assigned_value: Any,
+        wrapped_field: Optional[WrappedField] = None,
+    ) -> Comparator:
+        """
+        Find and return the appropriate condition for the attribute and its assigned value. This can be one of contains,
+        in_, or == depending on the type of the assigned value and the type of the attribute.
+
+        :param attr: The attribute to check.
+        :param assigned_value: The value assigned to the attribute.
+        :param wrapped_field: The WrappedField representing the attribute.
+        :return: A comparator expression representing the condition.
+        """
+        if self._attribute_is_iterable_while_the_value_is_not(
+            assigned_value, wrapped_field
+        ):
+            return contains(attr, assigned_value)
+        elif self._value_is_iterable_while_the_attribute_is_not(
+            assigned_value, wrapped_field
+        ):
+            return in_(attr, assigned_value)
+        else:
+            return attr == assigned_value
+
+    def _attribute_is_iterable_while_the_value_is_not(
+        self,
+        assigned_value: Any,
+        wrapped_field: Optional[WrappedField] = None,
+    ) -> bool:
+        """
+        Return True if the attribute is iterable while the assigned value is not an iterable.
+
+        :param assigned_value: The value assigned to the attribute.
+        :param wrapped_field: The WrappedField representing the attribute.
+        """
+        return (
+            wrapped_field
+            and wrapped_field.is_iterable
+            and not self._is_iterable_value(assigned_value)
+        )
+
+    def _value_is_iterable_while_the_attribute_is_not(
+        self, assigned_value: Any, wrapped_field: Optional[WrappedField] = None
+    ) -> bool:
+        """
+        Return True if the assigned value is iterable while the attribute is not an iterable.
+
+        :param assigned_value: The value assigned to the attribute.
+        :param wrapped_field: The WrappedField representing the attribute.
+        """
+        return (
+            wrapped_field
+            and not wrapped_field.is_iterable
+            and self._is_iterable_value(assigned_value)
+        )
+
+    def _flatten_the_attribute_if_is_iterable_while_value_is_not(
+        self,
+        attr: Attribute,
+        attr_assigned_value: Any,
+        attr_wrapped_field: Optional[WrappedField] = None,
+    ) -> Union[Attribute, Flatten]:
+        """
+        Apply a flatten operation to the attribute if it is an iterable while the assigned value is not an iterable.
+
+        :param attr: The attribute to flatten.
+        :param attr_assigned_value: The value assigned to the attribute.
+        :param attr_wrapped_field: The WrappedField representing the attribute.
+        :return: The flattened attribute if it is an iterable, else the original attribute.
+        """
+        if self._is_iterable_value(attr_assigned_value):
+            return attr
+        if attr_wrapped_field and attr_wrapped_field.is_iterable:
+            return flatten(attr)
+        return attr
+
+    @staticmethod
+    def _is_iterable_value(value) -> bool:
+        """
+        Whether the value is an iterable or a Match instance with an iterable type.
+
+        :param value: The value to check.
+        :return: True if the value is an iterable or a Match instance with an iterable type, else False.
+        """
+        if not isinstance(value, Match) and is_iterable(value):
+            return True
+        elif isinstance(value, Match) and is_iterable_type(value.type_):
+            return True
+        return False
+
+    def _add_type_filter_if_needed(
+        self,
+        attr: Attribute,
+        attr_match: Match,
+        attr_wrapped_field: Optional[WrappedField] = None,
+    ):
+        """
+        Adds a type filter to the match if needed. Basically when the type hint is not found or when it is
+        a superclass of the type provided in the match.
+
+        :param attr: The attribute to filter.
+        :param attr_match:The Match instance of the attribute.
+        :param attr_wrapped_field: The WrappedField representing the attribute.
+        :return:
+        """
+        attr_type = attr_wrapped_field.type_endpoint if attr_wrapped_field else None
+        if (not attr_type) or (
+            (attr_match.type_ is not attr_type)
+            and issubclass(attr_match.type_, attr_type)
+        ):
+            self.conditions.append(HasType(attr, attr_match.type_))
 
     def _create_variable(self) -> Variable[T]:
         """
@@ -420,7 +552,7 @@ class MatchEntity(Match[T]):
         return let(self.type_, self.domain)
 
 
-def match(type_: Type[T]) -> Union[Type[T], Callable[..., Match[T]]]:
+def match(type_: Type[T]) -> Union[Iterable[Type[T]], Callable[..., Match[T]]]:
     """
     This returns a factory function that creates a Match instance that looks for the pattern provided by the type and the
     keyword arguments.
