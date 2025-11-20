@@ -355,6 +355,10 @@ A special object that can be used to indicate that the variable should be select
 """
 
 
+class Select:
+    value: Any
+
+
 @dataclass
 class Match(Generic[T]):
     """
@@ -369,7 +373,7 @@ class Match(Generic[T]):
     """
     The keyword arguments to match against.
     """
-    variable: CanBehaveLikeAVariable[T] = field(init=False)
+    variable: CanBehaveLikeAVariable[T] = field(kw_only=True, default=None)
     """
     The created variable from the type and kwargs.
     """
@@ -392,6 +396,10 @@ class Match(Generic[T]):
     is_selected: bool = field(default=False, kw_only=True)
     """
     Whether the variable should be selected in the result.
+    """
+    existential: bool = field(default=False, kw_only=True)
+    """
+    Whether the match is an existential match check or find all matches.
     """
 
     def __call__(self, **kwargs) -> Self:
@@ -416,7 +424,7 @@ class Match(Generic[T]):
         :param parent: The parent match if this is a nested match.
         :return:
         """
-        self.variable = variable if variable else self._create_variable()
+        self.variable = variable if variable else self._get_or_create_variable()
         self.parent = parent
         if self.is_selected or not parent:
             self._update_selected_variables(self.variable)
@@ -433,7 +441,10 @@ class Match(Generic[T]):
             elif v is SELECTED:
                 self._update_selected_variables(attr)
             else:
-                if isinstance(v, Match):
+                if isinstance(v, Select):
+                    self._update_selected_variables(attr)
+                    v = v.value
+                elif isinstance(v, Match):
                     v = v.variable
                 condition = self._get_either_a_containment_or_an_equal_condition(
                     attr, v, attr_wrapped_field
@@ -473,6 +484,8 @@ class Match(Generic[T]):
             assigned_value, wrapped_field
         ):
             return in_(attr, assigned_value)
+        elif self.existential:
+            return contains(assigned_value, flatten(attr))
         else:
             return attr == assigned_value
 
@@ -536,6 +549,8 @@ class Match(Generic[T]):
         :param value: The value to check.
         :return: True if the value is an iterable or a Match instance with an iterable type, else False.
         """
+        if isinstance(value, Attribute):
+            return value._wrapped_field_.is_iterable
         if not isinstance(value, Match) and is_iterable(value):
             return True
         elif isinstance(value, Match) and is_iterable_type(value.type_):
@@ -564,10 +579,12 @@ class Match(Generic[T]):
         ):
             self.conditions.append(HasType(attr, attr_match.type_))
 
-    def _create_variable(self) -> Variable[T]:
+    def _get_or_create_variable(self) -> CanBehaveLikeAVariable[T]:
         """
-        Create a variable with the given type.
+        Create a variable with the given type if
         """
+        if self.variable:
+            return self.variable
         return let(self.type_, None)
 
     @cached_property
@@ -595,7 +612,7 @@ class MatchEntity(Match[T]):
     The domain to use for the variable created by the match.
     """
 
-    def _create_variable(self) -> Variable[T]:
+    def _get_or_create_variable(self) -> Variable[T]:
         """
         Create a variable with the given type and domain.
         """
@@ -620,7 +637,22 @@ def select(type_: Type[T]) -> MatchType:
     """
     Equivalent to match(type_) and selecting the variable to be included in the result.
     """
-    return Match(type_, is_selected=True)
+    match_ = match(type_)
+    match_.is_selected = True
+    return match_
+
+
+def select_literal(value: Any):
+    return Select(value)
+
+
+def select_any(type_: Type[T]) -> MatchType:
+    """
+    Equivalent to match(type_) and selecting the variable to be included in the result.
+    """
+    select_ = select(type_)
+    select_.existential = True
+    return select_
 
 
 def entity_matching(
