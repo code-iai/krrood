@@ -25,6 +25,7 @@ from typing_extensions import (
     Tuple,
     List,
     Callable,
+    Self,
 )
 
 from .symbolic import (
@@ -174,6 +175,7 @@ def _extract_variables_and_expression(
             if not sv._resolved:
                 expression_list.append(sv.expression._child_)
             selected_variables[i] = sv.variable
+            selected_variables.extend(sv.selected_attributes)
     expression = None
     if len(expression_list) > 0:
         expression = (
@@ -353,6 +355,12 @@ def inference(
     )
 
 
+SELECTED = object()
+"""
+A special object that can be used to indicate that the variable should be selected in the result.
+"""
+
+
 @dataclass
 class Match(Generic[T]):
     """
@@ -379,6 +387,14 @@ class Match(Generic[T]):
     """
     Whether the match has been resolved.
     """
+    selected_attributes: List[Attribute] = field(init=False, default_factory=list)
+    """
+    A list of selected attributes.
+    """
+    parent: Optional[Match] = field(init=False, default=None)
+    """
+    The parent match if this is a nested match.
+    """
 
     def __call__(self, **kwargs) -> Self:
         """
@@ -389,14 +405,21 @@ class Match(Generic[T]):
         self.kwargs = kwargs
         return self
 
-    def _resolve(self, variable: Optional[CanBehaveLikeAVariable] = None):
+    def _resolve(
+        self,
+        variable: Optional[CanBehaveLikeAVariable] = None,
+        parent: Optional[Match] = None,
+    ):
         """
         Resolve the match by creating the variable and conditions expressions.
 
-        :param variable: An optional pre-existing variable to use for the match; if not provided, a new variable will be created.
+        :param variable: An optional pre-existing variable to use for the match; if not provided, a new variable will
+         be created.
+        :param parent: The parent match if this is a nested match.
         :return:
         """
         self.variable = variable if variable else self._create_variable()
+        self.parent = parent
         for k, v in self.kwargs.items():
             attr: Attribute = getattr(self.variable, k)
             attr_wrapped_field = attr._wrapped_field_
@@ -404,9 +427,11 @@ class Match(Generic[T]):
                 attr = self._flatten_the_attribute_if_is_iterable_while_value_is_not(
                     attr, v, attr_wrapped_field
                 )
-                v._resolve(attr)
+                v._resolve(attr, self)
                 self._add_type_filter_if_needed(attr, v, attr_wrapped_field)
                 self.conditions.extend(v.conditions)
+            elif v is SELECTED:
+                self._update_selected_attributes(attr)
             else:
                 if isinstance(v, Match):
                     v = v.variable
@@ -415,6 +440,15 @@ class Match(Generic[T]):
                 )
                 self.conditions.append(condition)
         self._resolved = True
+
+    def _update_selected_attributes(self, attr: Attribute):
+        """
+        Update the selected attributes of the match by adding the given attribute to the root Match selected attributes.
+        """
+        if self.parent:
+            self.parent._update_selected_attributes(attr)
+        else:
+            self.selected_attributes.append(attr)
 
     def _get_either_a_containment_or_an_equal_condition(
         self,
@@ -565,7 +599,9 @@ class MatchEntity(Match[T]):
         return let(self.type_, self.domain)
 
 
-def match(type_: Type[T]) -> Union[Iterable[Type[T]], Callable[..., Match[T]]]:
+def match(
+    type_: Type[T],
+) -> Union[Iterable[Type[T]], Callable[..., Match[T]]]:
     """
     This returns a factory function that creates a Match instance that looks for the pattern provided by the type and the
     keyword arguments.
