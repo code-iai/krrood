@@ -47,6 +47,7 @@ from .symbolic import (
     Literal,
     ResultQuantifier,
     Attribute,
+    QueryObjectDescriptor,
 )
 from .result_quantification_constraint import ResultQuantificationConstraint
 
@@ -170,12 +171,6 @@ def _extract_variables_and_expression(
     """
     expression_list = list(properties)
     selected_variables = list(selected_variables)
-    for i, sv in enumerate(copy(selected_variables)):
-        if isinstance(sv, Match):
-            if not sv._resolved:
-                expression_list.append(sv.expression._child_)
-            selected_variables[i] = sv.variable
-            selected_variables.extend(sv.selected_attributes)
     expression = None
     if len(expression_list) > 0:
         expression = (
@@ -387,13 +382,17 @@ class Match(Generic[T]):
     """
     Whether the match has been resolved.
     """
-    selected_attributes: List[Attribute] = field(init=False, default_factory=list)
+    selected_variables: List[Attribute] = field(init=False, default_factory=list)
     """
     A list of selected attributes.
     """
     parent: Optional[Match] = field(init=False, default=None)
     """
     The parent match if this is a nested match.
+    """
+    is_selected: bool = field(default=False)
+    """
+    Whether the variable should be selected in the result.
     """
 
     def __call__(self, **kwargs) -> Self:
@@ -420,6 +419,8 @@ class Match(Generic[T]):
         """
         self.variable = variable if variable else self._create_variable()
         self.parent = parent
+        if self.is_selected or not parent:
+            self._update_selected_variables(self.variable)
         for k, v in self.kwargs.items():
             attr: Attribute = getattr(self.variable, k)
             attr_wrapped_field = attr._wrapped_field_
@@ -431,7 +432,7 @@ class Match(Generic[T]):
                 self._add_type_filter_if_needed(attr, v, attr_wrapped_field)
                 self.conditions.extend(v.conditions)
             elif v is SELECTED:
-                self._update_selected_attributes(attr)
+                self._update_selected_variables(attr)
             else:
                 if isinstance(v, Match):
                     v = v.variable
@@ -441,14 +442,14 @@ class Match(Generic[T]):
                 self.conditions.append(condition)
         self._resolved = True
 
-    def _update_selected_attributes(self, attr: Attribute):
+    def _update_selected_variables(self, variable: CanBehaveLikeAVariable):
         """
-        Update the selected attributes of the match by adding the given attribute to the root Match selected attributes.
+        Update the selected variables of the match by adding the given variable to the root Match selected variables.
         """
         if self.parent:
-            self.parent._update_selected_attributes(attr)
+            self.parent._update_selected_variables(variable)
         else:
-            self.selected_attributes.append(attr)
+            self.selected_variables.append(variable)
 
     def _get_either_a_containment_or_an_equal_condition(
         self,
@@ -571,12 +572,15 @@ class Match(Generic[T]):
         return let(self.type_, None)
 
     @cached_property
-    def expression(self) -> Entity[T]:
+    def expression(self) -> QueryObjectDescriptor[T]:
         """
         Return the entity expression corresponding to the match query.
         """
         self._resolve()
-        return entity(self.variable, *self.conditions)
+        if len(self.selected_variables) > 1:
+            return set_of(self.selected_variables, *self.conditions)
+        else:
+            return entity(self.selected_variables[0], *self.conditions)
 
 
 @dataclass
@@ -599,9 +603,10 @@ class MatchEntity(Match[T]):
         return let(self.type_, self.domain)
 
 
-def match(
-    type_: Type[T],
-) -> Union[Iterable[Type[T]], Callable[..., Match[T]]]:
+MatchType = Union[Iterable[Type[T]], Callable[..., Match[T]]]
+
+
+def match(type_: Type[T]) -> MatchType:
     """
     This returns a factory function that creates a Match instance that looks for the pattern provided by the type and the
     keyword arguments.
@@ -610,6 +615,13 @@ def match(
     :return: The Match instance.
     """
     return Match(type_)
+
+
+def select(type_: Type[T]) -> MatchType:
+    """
+    Equivalent to match(type_) and selecting the variable to be included in the result.
+    """
+    return Match(type_, is_selected=True)
 
 
 def entity_matching(
