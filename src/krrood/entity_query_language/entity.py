@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
-
-from black.strings import Match
+from copy import copy
 
 from .hashed_data import T
 from .symbol_graph import SymbolGraph
@@ -62,7 +61,7 @@ ConditionType = Union[SymbolicExpression, bool, Predicate]
 """
 The possible types for conditions.
 """
-EntityType = Union[SetOf[T], Entity[T], T, Iterable[T], Type[T], Match[T]]
+EntityType = Union[SetOf[T], Entity[T], T, Iterable[T], Type[T]]
 """
 The possible types for entities.
 """
@@ -170,6 +169,11 @@ def _extract_variables_and_expression(
     """
     expression_list = list(properties)
     selected_variables = list(selected_variables)
+    for i, sv in enumerate(copy(selected_variables)):
+        if isinstance(sv, Match):
+            if not sv._resolved:
+                expression_list.append(sv.expression._child_)
+            selected_variables[i] = sv.variable
     expression = None
     if len(expression_list) > 0:
         expression = (
