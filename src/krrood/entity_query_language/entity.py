@@ -363,7 +363,7 @@ class Match(Generic[T]):
     """
     The type of the variable.
     """
-    kwargs: Dict[str, Any]
+    kwargs: Dict[str, Any] = field(init=False, default_factory=dict)
     """
     The keyword arguments to match against.
     """
@@ -379,6 +379,15 @@ class Match(Generic[T]):
     """
     Whether the match has been resolved.
     """
+
+    def __call__(self, **kwargs) -> Self:
+        """
+        Update the match with new keyword arguments to constrain the type we are matching with.
+
+        :param kwargs: The keyword arguments to match against.
+        """
+        self.kwargs = kwargs
+        return self
 
     def _resolve(self, variable: Optional[CanBehaveLikeAVariable] = None):
         """
@@ -562,13 +571,9 @@ def match(type_: Type[T]) -> Union[Iterable[Type[T]], Callable[..., Match[T]]]:
     keyword arguments.
 
     :param type_: The type of the variable (i.e., The class you want to instantiate).
-    :return: The factory function for creating the match query.
+    :return: The Match instance.
     """
-
-    def match_factory(**kwargs) -> Match[T]:
-        return Match(type_, kwargs)
-
-    return match_factory
+    return Match(type_)
 
 
 def entity_matching(
@@ -580,10 +585,6 @@ def entity_matching(
 
     :param type_: The type of the variable (i.e., The class you want to instantiate).
     :param domain: The domain used for the variable created by the match.
-    :return: The factory function for creating the match query.
+    :return: The MatchEntity instance.
     """
-
-    def match_factory(**kwargs) -> MatchEntity[T]:
-        return MatchEntity(type_, kwargs, domain)
-
-    return match_factory
+    return MatchEntity(type_, domain)
