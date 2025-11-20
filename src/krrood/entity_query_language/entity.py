@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from functools import cached_property, lru_cache
-from copy import copy
+from functools import cached_property
 
 from .hashed_data import T
 from .symbol_graph import SymbolGraph
@@ -390,7 +389,7 @@ class Match(Generic[T]):
     """
     The parent match if this is a nested match.
     """
-    is_selected: bool = field(default=False)
+    is_selected: bool = field(default=False, kw_only=True)
     """
     Whether the variable should be selected in the result.
     """
