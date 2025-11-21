@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from functools import cached_property
 
-from .hashed_data import T
+from .hashed_data import T, HashedValue
 from .symbol_graph import SymbolGraph
 from .utils import is_iterable, is_iterable_type
 from ..class_diagrams.wrapped_field import WrappedField
@@ -47,6 +47,8 @@ from .symbolic import (
     ResultQuantifier,
     Attribute,
     QueryObjectDescriptor,
+    Selectable,
+    OperationResult,
 )
 from .result_quantification_constraint import ResultQuantificationConstraint
 
@@ -355,17 +357,13 @@ A special object that can be used to indicate that the variable should be select
 """
 
 
-class Select:
-    value: Any
-
-
 @dataclass
 class Match(Generic[T]):
     """
     Construct a query that looks for the pattern provided by the type and the keyword arguments.
     """
 
-    type_: Type[T]
+    type_: Optional[Type[T]] = None
     """
     The type of the variable.
     """
@@ -373,7 +371,7 @@ class Match(Generic[T]):
     """
     The keyword arguments to match against.
     """
-    variable: CanBehaveLikeAVariable[T] = field(kw_only=True, default=None)
+    variable: Optional[CanBehaveLikeAVariable[T]] = field(kw_only=True, default=None)
     """
     The created variable from the type and kwargs.
     """
@@ -428,6 +426,8 @@ class Match(Generic[T]):
         self.parent = parent
         if self.is_selected or not parent:
             self._update_selected_variables(self.variable)
+        if not self.type_:
+            self.type_ = self.variable._type_
         for k, v in self.kwargs.items():
             attr: Attribute = getattr(self.variable, k)
             attr_wrapped_field = attr._wrapped_field_
@@ -443,8 +443,7 @@ class Match(Generic[T]):
             else:
                 if isinstance(v, Select):
                     self._update_selected_variables(attr)
-                    v = v.value
-                elif isinstance(v, Match):
+                if isinstance(v, Match):
                     v = v.variable
                 condition = self._get_either_a_containment_or_an_equal_condition(
                     attr, v, attr_wrapped_field
@@ -607,7 +606,7 @@ class MatchEntity(Match[T]):
     of the outer match variable.
     """
 
-    domain: DomainType
+    domain: DomainType = None
     """
     The domain to use for the variable created by the match.
     """
@@ -617,6 +616,38 @@ class MatchEntity(Match[T]):
         Create a variable with the given type and domain.
         """
         return let(self.type_, self.domain)
+
+
+@dataclass
+class Select(Match[T], Selectable[T]):
+    _var_: CanBehaveLikeAVariable[T] = field(init=False)
+
+    def __post_init__(self):
+        self.is_selected = True
+        self._var_ = self.variable
+
+    def _resolve(
+        self,
+        variable: Optional[CanBehaveLikeAVariable] = None,
+        parent: Optional[Match] = None,
+    ):
+        super()._resolve(variable, parent)
+        self._var_ = self.variable
+
+    def _evaluate__(
+        self,
+        sources: Optional[Dict[int, HashedValue]] = None,
+        parent: Optional[SymbolicExpression] = None,
+    ) -> Iterable[OperationResult]:
+        yield from self.variable._evaluate__(sources, parent)
+
+    @property
+    def _name_(self) -> str:
+        return self._var_._name_
+
+    @cached_property
+    def _all_variable_instances_(self) -> List[CanBehaveLikeAVariable[T]]:
+        return self._var_._all_variable_instances_
 
 
 MatchType = Union[Iterable[Type[T]], Callable[..., Match[T]]]
@@ -633,17 +664,14 @@ def match(type_: Type[T]) -> MatchType:
     return Match(type_)
 
 
-def select(type_: Type[T]) -> MatchType:
+def select(type_: Optional[Type[T]] = None) -> MatchType:
     """
     Equivalent to match(type_) and selecting the variable to be included in the result.
     """
-    match_ = match(type_)
-    match_.is_selected = True
-    return match_
-
-
-def select_literal(value: Any):
-    return Select(value)
+    variable = None
+    if isinstance(type_, CanBehaveLikeAVariable):
+        type_ = type_._type_
+    return Select(type_, variable=variable)
 
 
 def select_any(type_: Type[T]) -> MatchType:

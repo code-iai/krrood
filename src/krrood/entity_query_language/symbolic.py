@@ -374,13 +374,9 @@ class SymbolicExpression(Generic[T], ABC):
 
 
 @dataclass(eq=False, repr=False)
-class CanBehaveLikeAVariable(SymbolicExpression[T], ABC):
-    """
-    This class adds the monitoring/tracking behaviour on variables that tracks attribute access, calling,
-    and comparison operations.
-    """
+class Selectable(SymbolicExpression[T], ABC):
 
-    _var_: CanBehaveLikeAVariable[T] = field(init=False, default=None)
+    _var_: CanBehaveLikeAVariable = field(init=False, default=None)
     """
     A variable that is used if the child class to this class want to provide a variable to be tracked other than 
     itself, this is specially useful for child classes that holds a variable instead of being a variable and want
@@ -388,12 +384,21 @@ class CanBehaveLikeAVariable(SymbolicExpression[T], ABC):
     For example, this is the case for the ResultQuantifiers & QueryDescriptors that operate on a single selected
     variable.
     """
+
+
+@dataclass(eq=False, repr=False)
+class CanBehaveLikeAVariable(Selectable[T], ABC):
+    """
+    This class adds the monitoring/tracking behaviour on variables that tracks attribute access, calling,
+    and comparison operations.
+    """
+
     _path_: List[ClassRelation] = field(init=False, default_factory=list)
     """
     The path of the variable in the symbol graph as a sequence of relation instances.
     """
 
-    _type_: Type = field(init=False, default=None)
+    _type_: Type[T] = field(init=False, default=None)
     """
     The type of the variable.
     """
