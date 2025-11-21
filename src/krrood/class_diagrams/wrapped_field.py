@@ -24,7 +24,7 @@ from typing_extensions import (
 )
 
 from .failures import MissingContainedTypeOfContainer
-from .utils import is_builtin_class
+from .utils import behaves_like_a_built_in_class
 from ..ormatic.utils import module_and_class_name
 
 if TYPE_CHECKING:
@@ -141,7 +141,8 @@ class WrappedField:
     @cached_property
     def is_collection_of_builtins(self):
         return self.is_container and all(
-            is_builtin_class(field_type) for field_type in get_args(self.resolved_type)
+            behaves_like_a_built_in_class(field_type)
+            for field_type in get_args(self.resolved_type)
         )
 
     @cached_property

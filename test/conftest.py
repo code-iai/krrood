@@ -1,12 +1,10 @@
 import logging
 import os
 import traceback
-import uuid
 from dataclasses import is_dataclass
 
 import pytest
 import sqlalchemy
-from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, configure_mappers
 
 import krrood.entity_query_language.orm.model
@@ -17,9 +15,9 @@ from krrood.entity_query_language.predicate import (
     HasType,
 )
 from krrood.entity_query_language.symbol_graph import SymbolGraph
-from krrood.ormatic.ormatic import ORMatic
 from krrood.ormatic.alternative_mappings import *  # type: ignore
-from krrood.ormatic.utils import classes_of_module
+from krrood.ormatic.ormatic import ORMatic
+from krrood.ormatic.utils import classes_of_module, create_engine
 from krrood.ormatic.utils import drop_database
 from krrood.utils import recursive_subclasses
 from .dataset import example_classes
@@ -28,6 +26,7 @@ from .dataset.example_classes import (
     NotMappedParent,
     ChildNotMapped,
     ConceptType,
+    JSONSerializableClass,
 )
 from .dataset.semantic_world_like_classes import *
 from .test_eql.conf.world.doors_and_drawers import DoorsAndDrawersWorld
@@ -59,7 +58,7 @@ def generate_sqlalchemy_interface():
 
     # remove classes that don't need persistence
     all_classes -= {HasType, HasTypes, ContainsType}
-    all_classes -= {NotMappedParent, ChildNotMapped}
+    all_classes -= {NotMappedParent, ChildNotMapped, JSONSerializableClass}
 
     # only keep dataclasses
     all_classes = {
@@ -76,7 +75,11 @@ def generate_sqlalchemy_interface():
 
     instance = ORMatic(
         class_dependency_graph=class_diagram,
-        type_mappings={PhysicalObject: ConceptType, uuid.UUID: sqlalchemy.UUID},
+        type_mappings={
+            PhysicalObject: ConceptType,
+            uuid.UUID: sqlalchemy.UUID,
+            JSONSerializableClass: JSON,
+        },
         alternative_mappings=recursive_subclasses(AlternativeMapping),
     )
 

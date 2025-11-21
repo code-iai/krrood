@@ -2,18 +2,15 @@ from __future__ import annotations
 
 import importlib
 from dataclasses import dataclass
+from json import JSONDecodeError
 
-from typing_extensions import Dict, Any, Self
+from typing_extensions import Dict, Any, Self, Union
+import json
+import uuid
 
+from krrood.utils import get_full_class_name
 
-def get_full_class_name(cls):
-    """
-    Returns the full name of a class, including the module name.
-
-    :param cls: The class.
-    :return: The full name of the class
-    """
-    return cls.__module__ + "." + cls.__name__
+JSON_TYPE_NAME = "__json_type__"  # the key used in JSON dicts to identify the class
 
 
 class JSONSerializationError(Exception):
@@ -60,18 +57,6 @@ class ClassNotFoundError(JSONSerializationError):
         )
 
 
-@dataclass
-class InvalidSubclassError(JSONSerializationError):
-    """Raised when the resolved class is not a SubclassJSONSerializer subclass."""
-
-    fully_qualified_class_name: str
-
-    def __post_init__(self):
-        super().__init__(
-            f"Resolved type {self.fully_qualified_class_name} is not a SubclassJSONSerializer"
-        )
-
-
 class SubclassJSONSerializer:
     """
     Class for automatic (de)serialization of subclasses using importlib.
@@ -81,7 +66,7 @@ class SubclassJSONSerializer:
     """
 
     def to_json(self) -> Dict[str, Any]:
-        return {"type": get_full_class_name(self.__class__)}
+        return {JSON_TYPE_NAME: get_full_class_name(self.__class__)}
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
@@ -90,7 +75,7 @@ class SubclassJSONSerializer:
         This method is called from the from_json method after the correct subclass is determined and should be
         overwritten by the subclass.
 
-        :param data: The json dict
+        :param data: The JSON dict
         :param kwargs: Additional keyword arguments to pass to the constructor of the subclass.
         :return: The deserialized object
         """
@@ -105,7 +90,7 @@ class SubclassJSONSerializer:
         :param kwargs: Additional keyword arguments to pass to the constructor of the subclass.
         :return: The correct instance of the subclass
         """
-        fully_qualified_class_name = data.get("type")
+        fully_qualified_class_name = data.get(JSON_TYPE_NAME)
         if not fully_qualified_class_name:
             raise MissingTypeError()
 
@@ -124,7 +109,95 @@ class SubclassJSONSerializer:
         except AttributeError as exc:
             raise ClassNotFoundError(class_name, module_name) from exc
 
-        if not issubclass(target_cls, SubclassJSONSerializer):
-            raise InvalidSubclassError(fully_qualified_class_name)
-
         return target_cls._from_json(data, **kwargs)
+
+
+class SubclassJSONEncoder(json.JSONEncoder):
+    """
+    Custom encoder to handle classes that inherit from SubClassJSONEncoder and UUIDs.
+    """
+
+    def default(self, obj):
+
+        # handle objects that are duck-typed like SubclassJSONSerializer
+        if hasattr(obj, "to_json"):
+            return obj.to_json()
+
+        # Let the base class handle other objects
+        return json.JSONEncoder.default(self, obj)
+
+
+class SubclassJSONDecoder(json.JSONDecoder):
+    """
+    Custom decoder to handle classes that inherit from SubClassJSONSerializer and UUIDs.
+    """
+
+    def decode(self, s, _w=json.decoder.WHITESPACE.match):
+        if not isinstance(s, dict):
+            obj = super().decode(s, _w)
+        else:
+            obj = s
+        return self._deserialize_nested(obj)
+
+    def _deserialize_nested(self, obj):
+        """
+        Recursively deserialize nested objects.
+        """
+        if isinstance(obj, dict):
+            if JSON_TYPE_NAME in obj:
+                return SubclassJSONSerializer.from_json(obj)
+            else:
+                return {k: self._deserialize_nested(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._deserialize_nested(item) for item in obj]
+        else:
+            return obj
+
+
+def to_json(obj: Union[SubclassJSONSerializer, Any]) -> str:
+    """
+    Serialize an object to a JSON string.
+    This is a drop-in replacement for json.dumps which handles SubclassJSONSerializer-like objects.
+
+    :param obj: The object to serialize
+    :return: The JSON string
+    """
+    return json.dumps(obj, cls=SubclassJSONEncoder)
+
+
+def from_json(data: str) -> Union[SubclassJSONSerializer, Any]:
+    """
+    Deserialize a JSON string to an object.
+    This is a drop-in replacement for json.loads which handles SubclassJSONSerializer-like objects.
+
+    :param data: The JSON string
+    :return: The deserialized object
+    """
+
+    # If we already have a Python container, recursively deserialize nested subclass payloads
+    if isinstance(data, dict) or isinstance(data, list):
+        decoder = SubclassJSONDecoder()
+        return decoder._deserialize_nested(data)
+
+    # If it is not a string (e.g., int, float, bool, None), return as-is
+    if not isinstance(data, str):
+        return data
+
+    # It is a string: try to parse as JSON; if that fails, treat it as a raw string
+    try:
+        return json.loads(data, cls=SubclassJSONDecoder)
+    except JSONDecodeError:
+        return data
+
+
+# %% Monkey patch UUID to behave like SubclassJSONSerializer
+def uuid_from_json(data):
+    return uuid.UUID(data["value"])
+
+
+def uuid_to_json(obj):
+    return {**SubclassJSONSerializer.to_json(obj), "value": str(obj)}
+
+
+uuid.UUID._from_json = lambda data: uuid_from_json(data)
+uuid.UUID.to_json = lambda self: uuid_to_json(self)

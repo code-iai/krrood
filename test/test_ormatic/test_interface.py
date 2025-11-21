@@ -2,13 +2,13 @@ import pytest
 from sqlalchemy import select
 
 from krrood.ormatic.alternative_mappings import FunctionMapping, UncallableFunction
-from ..dataset.example_classes import *
-from ..dataset.ormatic_interface import *
 from krrood.ormatic.dao import (
     to_dao,
     is_data_column,
     NoDAOFoundError,
 )
+from ..dataset.example_classes import *
+from ..dataset.ormatic_interface import *
 
 
 def test_position(session, database):
@@ -538,3 +538,29 @@ def test_uuid(session, database):
 
     queried = session.scalars(select(UUIDWrapperDAO)).one()
     assert queried.identification == obj.identification
+
+
+def test_list_of_custom_type(session, database):
+    obj = UUIDWrapper(uuid.uuid4(), [uuid.uuid4(), uuid.uuid4()])
+    dao = to_dao(obj)
+
+    session.add(dao)
+    session.commit()
+
+    queried = session.scalars(select(UUIDWrapperDAO)).one()
+    assert queried.identification == obj.identification
+    assert queried.other_identifications == obj.other_identifications
+
+
+def test_json_integration(session, database):
+    # obj = JSONWrapper(
+    #     [JSONSerializableClass(0.0, 1.0), JSONSerializableClass(3.0, 2.0)]
+    # )
+    obj = JSONWrapper(JSONSerializableClass(1, 2), [JSONSerializableClass(3, 4)])
+    dao = to_dao(obj)
+    session.add(dao)
+    session.commit()
+
+    queried = session.scalars(select(JSONWrapperDAO)).one()
+    reconstructed = queried.from_dao()
+    assert reconstructed == obj

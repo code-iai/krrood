@@ -37,6 +37,7 @@ class Base(DeclarativeBase):
     type_mappings = {
         test.dataset.example_classes.PhysicalObject: test.dataset.example_classes.ConceptType,
         uuid.UUID: sqlalchemy.sql.sqltypes.UUID,
+        test.dataset.example_classes.JSONSerializableClass: sqlalchemy.sql.sqltypes.JSON,
         typing.Type: krrood.ormatic.custom_types.TypeType,
     }
 
@@ -141,6 +142,22 @@ class InheritanceLevel2WithoutSymbolButAlternativelyMappedMappingDAO(
         "inherit_condition": database_id
         == InheritanceLevel1WithoutSymbolButAlternativelyMappedMappingDAO.database_id,
     }
+
+
+class JSONWrapperDAO(Base, DataAccessObject[test.dataset.example_classes.JSONWrapper]):
+
+    __tablename__ = "JSONWrapperDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    json_serializable_object: Mapped[sqlalchemy.sql.sqltypes.JSON] = mapped_column(
+        sqlalchemy.sql.sqltypes.JSON, nullable=False, use_existing_column=True
+    )
+    more_objects: Mapped[
+        typing.List[test.dataset.example_classes.JSONSerializableClass]
+    ] = mapped_column(JSON, nullable=False, use_existing_column=True)
 
 
 class ParentAlternativelyMappedMappingDAO(
@@ -1221,6 +1238,9 @@ class UUIDWrapperDAO(Base, DataAccessObject[test.dataset.example_classes.UUIDWra
 
     identification: Mapped[sqlalchemy.sql.sqltypes.UUID] = mapped_column(
         sqlalchemy.sql.sqltypes.UUID, nullable=False, use_existing_column=True
+    )
+    other_identifications: Mapped[typing.List[uuid.UUID]] = mapped_column(
+        JSON, nullable=False, use_existing_column=True
     )
 
 

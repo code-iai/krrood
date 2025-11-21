@@ -404,9 +404,13 @@ class WrappedTable:
             self.create_custom_type(wrapped_field)
 
         # handle JSON containers
-        elif wrapped_field.is_collection_of_builtins:
+        elif (
+            wrapped_field.is_collection_of_builtins
+            or wrapped_field.type_endpoint in self.ormatic.type_mappings
+            and wrapped_field.is_container
+        ):
             logger.info(f"Parsing as JSON.")
-            self.create_container_of_builtins(wrapped_field)
+            self.create_json_column(wrapped_field)
 
         # handle one to many relationships
         elif wrapped_field.is_one_to_many_relationship:
@@ -546,7 +550,7 @@ class WrappedTable:
             ColumnConstructor(rel_name, rel_type, rel_constructor)
         )
 
-    def create_container_of_builtins(self, wrapped_field: WrappedField):
+    def create_json_column(self, wrapped_field: WrappedField):
         """
         Create a column for a list-like of built-in values.
 

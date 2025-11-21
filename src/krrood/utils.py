@@ -29,3 +29,13 @@ class DataclassException(Exception):
 
     def __post_init__(self):
         super().__init__(self.message)
+
+
+def get_full_class_name(cls):
+    """
+    Returns the full name of a class, including the module name.
+
+    :param cls: The class.
+    :return: The full name of the class
+    """
+    return cls.__module__ + "." + cls.__name__
