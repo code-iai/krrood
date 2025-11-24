@@ -718,7 +718,7 @@ class Select(Match[T], Selectable[T]):
         return self._var_._all_variable_instances_
 
 
-MatchType = Union[Iterable[Type[T]], Callable[..., Union[Match[T], T]]]
+MatchType = Union[Iterable[Type[T]], Type[T], Callable[..., Union[Match[T], T]]]
 """
 The types needed for the linter to hint the kwargs for the type construction.
 """
@@ -728,7 +728,9 @@ The input type to the match function.
 """
 
 
-def match(type_: MatchInputType = None) -> MatchType:
+def match(
+    type_: MatchInputType = None,
+) -> MatchType:
     """
     Create and return a Match instance that looks for the pattern provided by the type and the
     keyword arguments.
@@ -741,7 +743,9 @@ def match(type_: MatchInputType = None) -> MatchType:
     return Match(type_)
 
 
-def match_any(type_: MatchInputType) -> MatchType:
+def match_any(
+    type_: MatchInputType,
+) -> MatchType:
     """
     Equivalent to match(type_) but for existential matches.
     """
@@ -750,7 +754,9 @@ def match_any(type_: MatchInputType) -> MatchType:
     return match_
 
 
-def select(type_: MatchInputType = None) -> MatchType:
+def select(
+    type_: MatchInputType = None,
+) -> MatchType:
     """
     Equivalent to match(type_) and selecting the variable to be included in the result.
     """
@@ -759,7 +765,9 @@ def select(type_: MatchInputType = None) -> MatchType:
     return Select(type_)
 
 
-def select_any(type_: MatchInputType) -> MatchType:
+def select_any(
+    type_: MatchInputType,
+) -> MatchType:
     """
     Equivalent to match_any(type_) and selecting the variable to be included in the result.
     """
