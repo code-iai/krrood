@@ -620,11 +620,19 @@ class MatchEntity(Match[T]):
 
 @dataclass
 class Select(Match[T], Selectable[T]):
+    """
+    This is a Match with the addition that the matched entity is selected in the result.
+    """
+
     _var_: CanBehaveLikeAVariable[T] = field(init=False)
+    is_selected: bool = field(init=False, default=True)
 
     def __post_init__(self):
-        self.is_selected = True
-        self._var_ = self.variable
+        """
+        This is needed to prevent the SymbolicExpression __post_init__ from being called which will make a node out of
+        this instance, and that is not what we want.
+        """
+        ...
 
     def _resolve(
         self,
