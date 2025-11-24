@@ -395,6 +395,10 @@ class Match(Generic[T]):
     """
     Whether the match is an existential match check or find all matches.
     """
+    is_iterable: bool = field(default=False, kw_only=True)
+    """
+    Whether the match variable is an iterable.
+    """
 
     def __call__(self, **kwargs) -> Self:
         """
@@ -422,17 +426,16 @@ class Match(Generic[T]):
         for attr_name, attr_assigned_value in self.kwargs.items():
             attr: Attribute = getattr(self.variable, attr_name)
             attr_wrapped_field = attr._wrapped_field_
-            if isinstance(attr_assigned_value, Select):
-                self._update_selected_variables(attr)
             if self.is_an_unresolved_match(attr_assigned_value):
                 self._resolve_child_match_and_merge_conditions(
                     attr, attr_assigned_value, attr_wrapped_field
                 )
             else:
+                if isinstance(attr_assigned_value, Select):
+                    self._update_selected_variables(attr_assigned_value.variable)
                 self._add_proper_conditions_for_an_already_resolved_child_match(
                     attr, attr_assigned_value, attr_wrapped_field
                 )
-        self._resolved = True
 
     @staticmethod
     def is_an_unresolved_match(value: Any) -> bool:
@@ -442,7 +445,7 @@ class Match(Generic[T]):
         :param value: The value to check.
         :return: True if the value is an unresolved Match instance, else False.
         """
-        return isinstance(value, Match) and not value._resolved
+        return isinstance(value, Match) and not value.variable
 
     def _add_proper_conditions_for_an_already_resolved_child_match(
         self,
@@ -457,8 +460,6 @@ class Match(Generic[T]):
         :param attr_assigned_value:  The assigned value of the attribute, which can be a Match instance.
         :param attr_wrapped_field: The WrappedField representing the attribute.
         """
-        if isinstance(attr_assigned_value, Match):
-            attr_assigned_value = attr_assigned_value.variable
         condition = self._get_either_a_containment_or_an_equal_condition(
             attr, attr_assigned_value, attr_wrapped_field
         )
@@ -527,18 +528,23 @@ class Match(Generic[T]):
         :param wrapped_field: The WrappedField representing the attribute.
         :return: A comparator expression representing the condition.
         """
+        assigned_variable = (
+            assigned_value.variable
+            if isinstance(assigned_value, Match)
+            else assigned_value
+        )
         if self._attribute_is_iterable_while_the_value_is_not(
             assigned_value, wrapped_field
         ):
-            return contains(attr, assigned_value)
+            return contains(attr, assigned_variable)
         elif self._value_is_iterable_while_the_attribute_is_not(
             assigned_value, wrapped_field
         ):
-            return in_(attr, assigned_value)
-        elif self.existential:
-            return contains(assigned_value, flatten(attr))
+            return in_(attr, assigned_variable)
+        elif isinstance(assigned_value, Match) and assigned_value.existential:
+            return contains(assigned_variable, flatten(attr))
         else:
-            return attr == assigned_value
+            return attr == assigned_variable
 
     def _attribute_is_iterable_while_the_value_is_not(
         self,
@@ -604,7 +610,7 @@ class Match(Generic[T]):
             return value._wrapped_field_.is_iterable
         if not isinstance(value, Match) and is_iterable(value):
             return True
-        elif isinstance(value, Match) and is_iterable_type(value.type_):
+        elif isinstance(value, Match) and value._is_iterable_value(value.variable):
             return True
         return False
 
@@ -713,32 +719,49 @@ class Select(Match[T], Selectable[T]):
 
 
 MatchType = Union[Iterable[Type[T]], Callable[..., Match[T]]]
+"""
+The types needed for the linter to hint the kwargs for the type construction.
+"""
+MatchInputType = Union[Type[T], CanBehaveLikeAVariable[T], None]
+"""
+The input type to the match function.
+"""
 
 
-def match(type_: Optional[Type[T]] = None) -> MatchType:
+def match(type_: MatchInputType = None) -> MatchType:
     """
-    This returns a factory function that creates a Match instance that looks for the pattern provided by the type and the
+    Create and return a Match instance that looks for the pattern provided by the type and the
     keyword arguments.
 
     :param type_: The type of the variable (i.e., The class you want to instantiate).
     :return: The Match instance.
     """
+    if isinstance(type_, CanBehaveLikeAVariable):
+        return Match(type_._type_, variable=type_)
     return Match(type_)
 
 
-def select(type_: Optional[Type[T]] = None) -> MatchType:
+def match_any(type_: MatchInputType) -> MatchType:
+    """
+    Equivalent to match(type_) but for existential matches.
+    """
+    match_ = match(type_)
+    match_.existential = True
+    return match_
+
+
+def select(type_: MatchInputType = None) -> MatchType:
     """
     Equivalent to match(type_) and selecting the variable to be included in the result.
     """
-    variable = None
     if isinstance(type_, CanBehaveLikeAVariable):
-        type_ = type_._type_
-    return Select(type_, variable=variable)
+        return Select(type_._type_, variable=type_)
+    return Select(type_)
 
 
-def select_any(type_: Type[T]) -> MatchType:
+def select_any(type_: MatchInputType) -> MatchType:
     """
-    Equivalent to match(type_) and selecting the variable to be included in the result.
+    Equivalent to match_any(type_) and selecting the variable to be included in the result.
     """
     select_ = select(type_)
     select_.existential = True
