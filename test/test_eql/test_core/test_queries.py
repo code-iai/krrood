@@ -16,7 +16,7 @@ from krrood.entity_query_language.entity import (
     or_,
     a,
     exists,
-    flatten
+    flatten,
 )
 from krrood.entity_query_language.failures import (
     MultipleSolutionFound,

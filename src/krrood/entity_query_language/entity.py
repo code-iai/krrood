@@ -400,7 +400,7 @@ class Match(Generic[T]):
     Whether the match variable is an iterable.
     """
 
-    def __call__(self, **kwargs) -> Union[Self, T]:
+    def __call__(self, **kwargs) -> Union[Self, T, CanBehaveLikeAVariable[T]]:
         """
         Update the match with new keyword arguments to constrain the type we are matching with.
 
@@ -718,7 +718,11 @@ class Select(Match[T], Selectable[T]):
         return self._var_._all_variable_instances_
 
 
-MatchType = Union[Iterable[Type[T]], Type[T], Callable[..., Union[Match[T], T]]]
+MatchType = Union[
+    Type[T],
+    CanBehaveLikeAVariable[T],
+    Callable[..., Union[Match[T], CanBehaveLikeAVariable[T], T]],
+]
 """
 The types needed for the linter to hint the kwargs for the type construction.
 """
@@ -729,8 +733,8 @@ The input type to the match function.
 
 
 def match(
-    type_: MatchInputType = None,
-) -> MatchType:
+    type_: Union[Type[T], CanBehaveLikeAVariable[T], None] = None,
+) -> Union[Type[T], CanBehaveLikeAVariable[T], Match[T]]:
     """
     Create and return a Match instance that looks for the pattern provided by the type and the
     keyword arguments.
@@ -744,8 +748,8 @@ def match(
 
 
 def match_any(
-    type_: MatchInputType,
-) -> MatchType:
+    type_: Union[Type[T], CanBehaveLikeAVariable[T], None],
+) -> Union[Type[T], CanBehaveLikeAVariable[T], Match[T]]:
     """
     Equivalent to match(type_) but for existential matches.
     """
@@ -755,8 +759,8 @@ def match_any(
 
 
 def select(
-    type_: MatchInputType = None,
-) -> MatchType:
+    type_: Union[Type[T], CanBehaveLikeAVariable[T], None] = None,
+) -> Union[Type[T], CanBehaveLikeAVariable[T], Select[T]]:
     """
     Equivalent to match(type_) and selecting the variable to be included in the result.
     """
@@ -766,8 +770,8 @@ def select(
 
 
 def select_any(
-    type_: MatchInputType,
-) -> MatchType:
+    type_: Union[Type[T], CanBehaveLikeAVariable[T], None] = None,
+) -> Union[Type[T], CanBehaveLikeAVariable[T], Select[T]]:
     """
     Equivalent to match_any(type_) and selecting the variable to be included in the result.
     """
@@ -777,8 +781,8 @@ def select_any(
 
 
 def entity_matching(
-    type_: Type[T], domain: DomainType
-) -> Union[Type[T], Callable[..., MatchEntity[T]]]:
+    type_: Union[Type[T], CanBehaveLikeAVariable[T]], domain: DomainType
+) -> Union[Type[T], CanBehaveLikeAVariable[T], MatchEntity[T]]:
     """
     Same as :py:func:`krrood.entity_query_language.entity.match` but with a domain to use for the variable created
      by the match.
