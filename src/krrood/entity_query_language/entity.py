@@ -419,8 +419,8 @@ class Match(Generic[T]):
         :return:
         """
         self._update_the_match_fields(variable, parent)
-        for k, attr_assigned_value in self.kwargs.items():
-            attr: Attribute = getattr(self.variable, k)
+        for attr_name, attr_assigned_value in self.kwargs.items():
+            attr: Attribute = getattr(self.variable, attr_name)
             attr_wrapped_field = attr._wrapped_field_
             if isinstance(attr_assigned_value, Select):
                 self._update_selected_variables(attr)
