@@ -400,7 +400,7 @@ class Match(Generic[T]):
     Whether the match variable is an iterable.
     """
 
-    def __call__(self, **kwargs) -> Self:
+    def __call__(self, **kwargs) -> Union[Self, T]:
         """
         Update the match with new keyword arguments to constrain the type we are matching with.
 
@@ -718,7 +718,7 @@ class Select(Match[T], Selectable[T]):
         return self._var_._all_variable_instances_
 
 
-MatchType = Union[Iterable[Type[T]], Callable[..., Match[T]]]
+MatchType = Union[Iterable[Type[T]], Callable[..., Union[Match[T], T]]]
 """
 The types needed for the linter to hint the kwargs for the type construction.
 """
