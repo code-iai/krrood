@@ -373,10 +373,6 @@ class Match(Generic[T]):
     """
     The conditions that define the match.
     """
-    _resolved: bool = field(init=False, default=False)
-    """
-    Whether the match has been resolved.
-    """
     selected_variables: List[CanBehaveLikeAVariable] = field(
         init=False, default_factory=list
     )
@@ -394,10 +390,6 @@ class Match(Generic[T]):
     existential: bool = field(default=False, kw_only=True)
     """
     Whether the match is an existential match check or find all matches.
-    """
-    is_iterable: bool = field(default=False, kw_only=True)
-    """
-    Whether the match variable is an iterable.
     """
 
     def __call__(self, **kwargs) -> Union[Self, T, CanBehaveLikeAVariable[T]]:
@@ -716,20 +708,6 @@ class Select(Match[T], Selectable[T]):
     @cached_property
     def _all_variable_instances_(self) -> List[CanBehaveLikeAVariable[T]]:
         return self._var_._all_variable_instances_
-
-
-MatchType = Union[
-    Type[T],
-    CanBehaveLikeAVariable[T],
-    Callable[..., Union[Match[T], CanBehaveLikeAVariable[T], T]],
-]
-"""
-The types needed for the linter to hint the kwargs for the type construction.
-"""
-MatchInputType = Union[Type[T], CanBehaveLikeAVariable[T], None]
-"""
-The input type to the match function.
-"""
 
 
 def match(
