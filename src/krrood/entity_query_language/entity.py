@@ -351,12 +351,6 @@ def inference(
     )
 
 
-SELECTED = object()
-"""
-A special object that can be used to indicate that the variable should be selected in the result.
-"""
-
-
 @dataclass
 class Match(Generic[T]):
     """
@@ -383,7 +377,7 @@ class Match(Generic[T]):
     """
     Whether the match has been resolved.
     """
-    selected_variables: List[Attribute] = field(init=False, default_factory=list)
+    selected_variables: List[CanBehaveLikeAVariable] = field(init=False, default_factory=list)
     """
     A list of selected attributes.
     """
@@ -424,7 +418,7 @@ class Match(Generic[T]):
         """
         self.variable = variable if variable else self._get_or_create_variable()
         self.parent = parent
-        if self.is_selected or not parent:
+        if self.is_selected:
             self._update_selected_variables(self.variable)
         if not self.type_:
             self.type_ = self.variable._type_
@@ -438,8 +432,6 @@ class Match(Generic[T]):
                 v._resolve(attr, self)
                 self._add_type_filter_if_needed(attr, v, attr_wrapped_field)
                 self.conditions.extend(v.conditions)
-            elif v is SELECTED:
-                self._update_selected_variables(attr)
             else:
                 if isinstance(v, Select):
                     self._update_selected_variables(attr)
@@ -595,6 +587,8 @@ class Match(Generic[T]):
         if len(self.selected_variables) > 1:
             return set_of(self.selected_variables, *self.conditions)
         else:
+            if not self.selected_variables:
+                self.selected_variables.append(self.variable)
             return entity(self.selected_variables[0], *self.conditions)
 
 
@@ -661,7 +655,7 @@ class Select(Match[T], Selectable[T]):
 MatchType = Union[Iterable[Type[T]], Callable[..., Match[T]]]
 
 
-def match(type_: Type[T]) -> MatchType:
+def match(type_: Optional[Type[T]] = None) -> MatchType:
     """
     This returns a factory function that creates a Match instance that looks for the pattern provided by the type and the
     keyword arguments.
