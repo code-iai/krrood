@@ -377,7 +377,9 @@ class Match(Generic[T]):
     """
     Whether the match has been resolved.
     """
-    selected_variables: List[CanBehaveLikeAVariable] = field(init=False, default_factory=list)
+    selected_variables: List[CanBehaveLikeAVariable] = field(
+        init=False, default_factory=list
+    )
     """
     A list of selected attributes.
     """
@@ -416,32 +418,90 @@ class Match(Generic[T]):
         :param parent: The parent match if this is a nested match.
         :return:
         """
+        self._update_the_match_fields(variable, parent)
+        for k, attr_assigned_value in self.kwargs.items():
+            attr: Attribute = getattr(self.variable, k)
+            attr_wrapped_field = attr._wrapped_field_
+            if isinstance(attr_assigned_value, Select):
+                self._update_selected_variables(attr)
+            if self.is_an_unresolved_match(attr_assigned_value):
+                self._resolve_child_match_and_merge_conditions(
+                    attr, attr_assigned_value, attr_wrapped_field
+                )
+            else:
+                self._add_proper_conditions_for_an_already_resolved_child_match(
+                    attr, attr_assigned_value, attr_wrapped_field
+                )
+        self._resolved = True
+
+    @staticmethod
+    def is_an_unresolved_match(value: Any) -> bool:
+        """
+        Check whether the given value is an unresolved Match instance.
+
+        :param value: The value to check.
+        :return: True if the value is an unresolved Match instance, else False.
+        """
+        return isinstance(value, Match) and not value._resolved
+
+    def _add_proper_conditions_for_an_already_resolved_child_match(
+        self,
+        attr: Attribute,
+        attr_assigned_value: Any,
+        attr_wrapped_field: WrappedField,
+    ):
+        """
+        Add proper conditions for an already resolved child match. These could be an equal, or a containment condition.
+
+        :param attr: A symbolic attribute of this match variable.
+        :param attr_assigned_value:  The assigned value of the attribute, which can be a Match instance.
+        :param attr_wrapped_field: The WrappedField representing the attribute.
+        """
+        if isinstance(attr_assigned_value, Match):
+            attr_assigned_value = attr_assigned_value.variable
+        condition = self._get_either_a_containment_or_an_equal_condition(
+            attr, attr_assigned_value, attr_wrapped_field
+        )
+        self.conditions.append(condition)
+
+    def _resolve_child_match_and_merge_conditions(
+        self,
+        attr: Attribute,
+        attr_assigned_value: Match,
+        attr_wrapped_field: WrappedField,
+    ):
+        """
+        Resolve the child match and merge the conditions with the parent match.
+
+        :param attr: A symbolic attribute of this match variable.
+        :param attr_assigned_value: The assigned value of the attribute, which is a Match instance.
+        :param attr_wrapped_field: The WrappedField representing the attribute.
+        """
+        attr = self._flatten_the_attribute_if_is_iterable_while_value_is_not(
+            attr, attr_assigned_value, attr_wrapped_field
+        )
+        attr_assigned_value._resolve(attr, self)
+        self._add_type_filter_if_needed(attr, attr_assigned_value, attr_wrapped_field)
+        self.conditions.extend(attr_assigned_value.conditions)
+
+    def _update_the_match_fields(
+        self,
+        variable: Optional[CanBehaveLikeAVariable] = None,
+        parent: Optional[Match] = None,
+    ):
+        """
+        Update the match variable, parent, is_selected, and type_ fields.
+
+        :param variable: The variable to use for the match.
+         If None, a new variable will be created.
+        :param parent: The parent match if this is a nested match.
+        """
         self.variable = variable if variable else self._get_or_create_variable()
         self.parent = parent
         if self.is_selected:
             self._update_selected_variables(self.variable)
         if not self.type_:
             self.type_ = self.variable._type_
-        for k, v in self.kwargs.items():
-            attr: Attribute = getattr(self.variable, k)
-            attr_wrapped_field = attr._wrapped_field_
-            if isinstance(v, Match) and not v._resolved:
-                attr = self._flatten_the_attribute_if_is_iterable_while_value_is_not(
-                    attr, v, attr_wrapped_field
-                )
-                v._resolve(attr, self)
-                self._add_type_filter_if_needed(attr, v, attr_wrapped_field)
-                self.conditions.extend(v.conditions)
-            else:
-                if isinstance(v, Select):
-                    self._update_selected_variables(attr)
-                if isinstance(v, Match):
-                    v = v.variable
-                condition = self._get_either_a_containment_or_an_equal_condition(
-                    attr, v, attr_wrapped_field
-                )
-                self.conditions.append(condition)
-        self._resolved = True
 
     def _update_selected_variables(self, variable: CanBehaveLikeAVariable):
         """
