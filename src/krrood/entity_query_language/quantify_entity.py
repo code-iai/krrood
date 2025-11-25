@@ -55,6 +55,6 @@ def _quantify_entity(
     :param quantifier_kwargs: Keyword arguments to pass to the quantifier.
     :return: The quantified entity.
     """
-    if isinstance(entity_, Match):
+    if isinstance(entity_, Match) and not entity_.variable:
         entity_ = entity_.expression
     return quantifier(entity_, **quantifier_kwargs)

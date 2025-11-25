@@ -471,7 +471,7 @@ class ClassDiagram:
         except KeyError:
             raise ClassIsUnMappedInClassDiagram(clazz)
 
-    def add_node(self, clazz: WrappedClass):
+    def add_node(self, clazz: Union[Type, WrappedClass]):
         """
         Adds a new node to the dependency graph for the specified wrapped class.
 
@@ -481,9 +481,24 @@ class ClassDiagram:
 
         :param clazz: The wrapped class object to be added to the dependency graph.
         """
+        clazz = self.ensure_wrapped_class(clazz)
+        if clazz.index is not None:
+            return
         clazz.index = self._dependency_graph.add_node(clazz)
         clazz._class_diagram = self
         self._cls_wrapped_cls_map[clazz.clazz] = clazz
+
+    @staticmethod
+    def ensure_wrapped_class(clazz: Union[Type, WrappedClass]) -> WrappedClass:
+        """
+        Ensure that the clazz is a WrappedClass.
+
+        :param clazz: The class to wrap.
+        :return: The wrapped class.
+        """
+        if not isinstance(clazz, WrappedClass):
+            clazz = WrappedClass(clazz)
+        return clazz
 
     def add_relation(self, relation: ClassRelation):
         """

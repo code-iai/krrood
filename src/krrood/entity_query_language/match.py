@@ -14,6 +14,7 @@ from .entity import (
     set_of,
     entity,
     DomainType,
+    exists,
 )
 from .hashed_data import T, HashedValue
 from .predicate import HasType
@@ -218,7 +219,7 @@ class Match(Generic[T]):
         ):
             return in_(attr, assigned_variable)
         elif isinstance(assigned_value, Match) and assigned_value.existential:
-            return contains(assigned_variable, flatten(attr))
+            return exists(attr, contains(assigned_variable, flatten(attr)))
         else:
             return attr == assigned_variable
 

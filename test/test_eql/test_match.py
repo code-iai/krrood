@@ -91,3 +91,23 @@ def test_match_all(world_and_cabinets_and_specific_drawer):
     cabinet = the(entity_matching(Cabinet, cabinets)(drawers=[my_drawer]))
     found_cabinet = cabinet.evaluate()
     assert found_cabinet is cabinets[1]
+
+
+def test_match_any_on_collection_returns_unique_parent_entities():
+    # setup from the notebook example
+    c1 = Container("Container1")
+    other_c = Container("ContainerX")
+    h1 = Handle("Handle1")
+
+    drawer1 = Drawer(handle=h1, container=c1)
+    drawer2 = Drawer(handle=Handle("OtherHandle"), container=other_c)
+    cabinet1 = Cabinet(container=c1, drawers=[drawer1, drawer2])
+    cabinet2 = Cabinet(container=other_c, drawers=[drawer2])
+    views = [drawer1, drawer2, cabinet1, cabinet2]
+
+    q = an(entity_matching(Cabinet, views)(drawers=match_any({drawer1, drawer2})))
+
+    results = list(q.evaluate())
+    # Expect exactly the two cabinets, no duplicates
+    assert len(results) == 2
+    assert {id(x) for x in results} == {id(cabinet1), id(cabinet2)}

@@ -1244,9 +1244,11 @@ class Attribute(DomainMapping):
 
     @cached_property
     def _wrapped_field_(self) -> Optional[WrappedField]:
-        return self._wrapped_owner_class_._wrapped_field_name_map_.get(
-            self._attr_name_, None
-        )
+        if self._wrapped_owner_class_ is not None:
+            return self._wrapped_owner_class_._wrapped_field_name_map_.get(
+                self._attr_name_, None
+            )
+        return None
 
     @cached_property
     def _wrapped_owner_class_(self):
@@ -1446,6 +1448,12 @@ class Comparator(BinaryOperator):
     def get_first_second_operands(
         self, sources: Dict[int, HashedValue]
     ) -> Tuple[SymbolicExpression, SymbolicExpression]:
+        left_has_the = any(isinstance(desc, The) for desc in self.left._descendants_)
+        right_has_the = any(isinstance(desc, The) for desc in self.right._descendants_)
+        if left_has_the and not right_has_the:
+            return self.left, self.right
+        elif not left_has_the and right_has_the:
+            return self.right, self.left
         if sources and any(
             v.value._var_._id_ in sources for v in self.right._unique_variables_
         ):
@@ -1759,18 +1767,12 @@ class Exists(QuantifiedConditional):
     ) -> Iterable[OperationResult]:
         sources = sources or {}
         self._eval_parent_ = parent
-        for var_val in self.variable._evaluate__(sources, parent=self):
-            yield from self.evaluate_condition(var_val.bindings)
-
-    def evaluate_condition(
-        self, sources: Dict[int, HashedValue]
-    ) -> Iterable[OperationResult]:
-        # Evaluate the condition under this particular universal value
-        for condition_val in self.condition._evaluate__(sources, parent=self):
-            self._is_false_ = condition_val.is_false
-            if not self._is_false_:
-                yield OperationResult(condition_val.bindings, False, self)
-                break
+        seen_var_values = set()
+        for val in self.condition._evaluate__(sources, parent=self):
+            var_val = val[self.variable._id_]
+            if val.is_true and var_val not in seen_var_values:
+                seen_var_values.add(var_val)
+                yield OperationResult(val.bindings, False, self)
 
     def __invert__(self):
         return ForAll(self.variable, self.condition.__invert__())
