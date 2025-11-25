@@ -1,15 +1,11 @@
 import pytest
 
 from krrood.entity_query_language.entity import (
-    the,
-    entity_matching,
-    match,
     entity,
     let,
-    select,
-    an,
-    match_any,
 )
+from krrood.entity_query_language.quantify_entity import an, the
+from krrood.entity_query_language.match import match, match_any, select, entity_matching
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.symbolic import UnificationDict, SetOf
 from ..dataset.semantic_world_like_classes import (

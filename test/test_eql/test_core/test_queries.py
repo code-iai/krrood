@@ -8,16 +8,14 @@ from krrood.entity_query_language.entity import (
     not_,
     contains,
     in_,
-    an,
     entity,
     set_of,
     let,
-    the,
     or_,
-    a,
     exists,
     flatten,
 )
+from krrood.entity_query_language.quantify_entity import an, a, the
 from krrood.entity_query_language.failures import (
     MultipleSolutionFound,
     UnsupportedNegation,
