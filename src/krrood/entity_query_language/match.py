@@ -282,11 +282,9 @@ class Match(Generic[T]):
         :param value: The value to check.
         :return: True if the value is an iterable or a Match instance with an iterable type, else False.
         """
-        if isinstance(value, Attribute):
-            return value._wrapped_field_.is_iterable
-        elif isinstance(value, CanBehaveLikeAVariable):
-            return is_iterable(next(iter(value._evaluate__())).operand_value.value)
-        if not isinstance(value, Match) and is_iterable(value):
+        if isinstance(value, CanBehaveLikeAVariable):
+            return value._is_iterable_
+        elif not isinstance(value, Match) and is_iterable(value):
             return True
         elif isinstance(value, Match) and value._is_iterable_value(value.variable):
             return True

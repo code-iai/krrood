@@ -111,10 +111,6 @@ class OperationResult:
     def is_true(self):
         return not self.is_false
 
-    @property
-    def operand_value(self):
-        return self.bindings[self.operand._id_]
-
     def __contains__(self, item):
         return item in self.bindings
 
@@ -388,6 +384,17 @@ class Selectable(SymbolicExpression[T], ABC):
     For example, this is the case for the ResultQuantifiers & QueryDescriptors that operate on a single selected
     variable.
     """
+
+    @property
+    def _is_iterable_(self):
+        """
+        Whether the selectable is iterable.
+
+        :return: True if the selectable is iterable, False otherwise.
+        """
+        if self._var_ and self._var_ is not self:
+            return self._var_._is_iterable_
+        return False
 
 
 @dataclass(eq=False, repr=False)
@@ -1031,6 +1038,12 @@ class Variable(CanBehaveLikeAVariable[T]):
         return variables
 
     @property
+    def _is_iterable_(self):
+        if self._domain_:
+            return next(iter(self._domain_), None) is not None
+        return False
+
+    @property
     def _plot_color_(self) -> ColorLegend:
         if self._plot_color__:
             return self._plot_color__
@@ -1186,6 +1199,12 @@ class Attribute(DomainMapping):
                 self._wrapped_owner_class_, self._wrapped_type_, self._wrapped_field_
             )
         return None
+
+    @property
+    def _is_iterable_(self):
+        if self._wrapped_field_:
+            return self._wrapped_field_.is_iterable
+        return False
 
     @cached_property
     def _wrapped_type_(self):
