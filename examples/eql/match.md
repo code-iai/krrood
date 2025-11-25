@@ -27,7 +27,7 @@ from typing_extensions import List
 from krrood.entity_query_language.entity import (
     let, entity, Symbol,
 )
-from krrood.entity_query_language.quantify_entity import the
+from krrood.entity_query_language.quantify_entity import the, an
 from krrood.entity_query_language.match import (
     match,
     entity_matching,
@@ -177,14 +177,16 @@ class Cabinet(Symbol):
 drawer1 = Drawer(handle=h1, container=c1)
 drawer2 = Drawer(handle=Handle("OtherHandle"), container=other_c)
 cabinet1 = Cabinet(container=c1, drawers=[drawer1, drawer2])
-views = [drawer1, cabinet1]
+cabinet2 = Cabinet(container=other_c, drawers=[drawer2])
+views = [drawer1, drawer2, cabinet1, cabinet2]
 
-# Query: find the cabinet that has a drawer whose handle is named "Handle1"
-drawer_pattern = the(entity_matching(Drawer, views)(handle=match(Handle)(name="Handle1")))
-cabinet_query = the(entity_matching(Cabinet, views)(drawers=match_any(drawer_pattern)))
+# Query: find the cabinet that has any drawer from the set {drawer1, drawer2}
+cabinet_query = an(entity_matching(Cabinet, views)(drawers=match_any([drawer1, drawer2])))
 
-found_cabinet = cabinet_query.evaluate()
-print(found_cabinet.container.name, found_cabinet.drawers[0].handle.name)
+found_cabinets = list(cabinet_query.evaluate())
+assert len(found_cabinets) == 2
+print(found_cabinets[0].container.name, found_cabinets[0].drawers[0].handle.name)
+print(found_cabinets[1].container.name, found_cabinets[1].drawers[0].handle.name)
 ```
 
 ## Selecting elements from collections with `select_any()`
@@ -195,15 +197,13 @@ It behaves like `match_any(Type)` but also selects the matched element so you ca
 ```{code-cell} ipython3
 from krrood.entity_query_language.match import select_any
 
-selected_drawer = select_any(Drawer)
-cabinet_with_selected_drawer = the(
-    entity_matching(Cabinet, views)(
-        drawers=selected_drawer(handle=match(Handle)(name="Handle1"))
-    )
-)
+selected_drawers = select_any([drawer1, drawer2])
+# Query: find the cabinet that has any drawer from the set {drawer1, drawer2}
+cabinet_query = an(entity_matching(Cabinet, views)(drawers=selected_drawers))
 
-ans = cabinet_with_selected_drawer.evaluate()
-print(ans[selected_drawer].handle.name)
+ans = list(cabinet_query.evaluate())
+assert len(ans) == 2
+print(ans[0][selected_drawer][0].handle.name)
 ```
 
 ## Selecting inner objects with `select()`

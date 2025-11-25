@@ -109,7 +109,7 @@ class Match(Generic[T]):
                 )
             else:
                 if isinstance(attr_assigned_value, Select):
-                    self._update_selected_variables(attr_assigned_value.variable)
+                    self._update_selected_variables(attr)
                 self._add_proper_conditions_for_an_already_resolved_child_match(
                     attr, attr_assigned_value, attr_wrapped_field
                 )
