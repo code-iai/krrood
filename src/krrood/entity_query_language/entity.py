@@ -5,7 +5,7 @@ from functools import cached_property
 
 from .hashed_data import T, HashedValue
 from .symbol_graph import SymbolGraph
-from .utils import is_iterable, is_iterable_type
+from .utils import is_iterable
 from ..class_diagrams.wrapped_field import WrappedField
 
 """
@@ -389,7 +389,7 @@ class Match(Generic[T]):
     """
     existential: bool = field(default=False, kw_only=True)
     """
-    Whether the match is an existential match check or find all matches.
+    Whether the match is an existential match check or not.
     """
 
     def __call__(self, **kwargs) -> Union[Self, T, CanBehaveLikeAVariable[T]]:
@@ -397,8 +397,21 @@ class Match(Generic[T]):
         Update the match with new keyword arguments to constrain the type we are matching with.
 
         :param kwargs: The keyword arguments to match against.
+        :return: The current match instance after updating it with the new keyword arguments.
         """
         self.kwargs = kwargs
+        return self
+
+    @property
+    def any(self) -> Union[Self, T, CanBehaveLikeAVariable[T]]:
+        """
+        This is useful only when the attribute and the assigned value (the current match instance) are both iterables.
+        Then this means that the intersection between the two iterables is not empty. i.e., at least one match between
+        the two iterables exists.
+
+        :return: The current match instance after marking it as an existential match.
+        """
+        self.existential = True
         return self
 
     def _resolve(
@@ -600,6 +613,8 @@ class Match(Generic[T]):
         """
         if isinstance(value, Attribute):
             return value._wrapped_field_.is_iterable
+        elif isinstance(value, CanBehaveLikeAVariable):
+            return is_iterable(next(iter(value._evaluate__())).operand_value.value)
         if not isinstance(value, Match) and is_iterable(value):
             return True
         elif isinstance(value, Match) and value._is_iterable_value(value.variable):
@@ -711,7 +726,7 @@ class Select(Match[T], Selectable[T]):
 
 
 def match(
-    type_: Union[Type[T], CanBehaveLikeAVariable[T], None] = None,
+    type_: Union[Type[T], CanBehaveLikeAVariable[T], Any, None] = None,
 ) -> Union[Type[T], CanBehaveLikeAVariable[T], Match[T]]:
     """
     Create and return a Match instance that looks for the pattern provided by the type and the
@@ -720,42 +735,31 @@ def match(
     :param type_: The type of the variable (i.e., The class you want to instantiate).
     :return: The Match instance.
     """
-    if isinstance(type_, CanBehaveLikeAVariable):
-        return Match(type_._type_, variable=type_)
-    return Match(type_)
-
-
-def match_any(
-    type_: Union[Type[T], CanBehaveLikeAVariable[T], None],
-) -> Union[Type[T], CanBehaveLikeAVariable[T], Match[T]]:
-    """
-    Equivalent to match(type_) but for existential matches.
-    """
-    match_ = match(type_)
-    match_.existential = True
-    return match_
+    return _match_or_select(Match, type_)
 
 
 def select(
-    type_: Union[Type[T], CanBehaveLikeAVariable[T], None] = None,
+    type_: Union[Type[T], CanBehaveLikeAVariable[T], Any, None] = None,
 ) -> Union[Type[T], CanBehaveLikeAVariable[T], Select[T]]:
     """
     Equivalent to match(type_) and selecting the variable to be included in the result.
     """
+    return _match_or_select(Select, type_)
+
+
+def _match_or_select(
+    match_type: Type[Match],
+    type_: Union[Type[T], CanBehaveLikeAVariable[T], Any, None] = None,
+) -> Union[Type[T], CanBehaveLikeAVariable[T], Match[T]]:
+    """
+    Create and return a Match/Select instance that looks for the pattern provided by the type and the
+    keyword arguments.
+    """
     if isinstance(type_, CanBehaveLikeAVariable):
         return Select(type_._type_, variable=type_)
-    return Select(type_)
-
-
-def select_any(
-    type_: Union[Type[T], CanBehaveLikeAVariable[T], None] = None,
-) -> Union[Type[T], CanBehaveLikeAVariable[T], Select[T]]:
-    """
-    Equivalent to match_any(type_) and selecting the variable to be included in the result.
-    """
-    select_ = select(type_)
-    select_.existential = True
-    return select_
+    elif type_ and not isinstance(type_, type):
+        return match_type(type_=type_, variable=Literal(type_))
+    return match_type(type_)
 
 
 def entity_matching(

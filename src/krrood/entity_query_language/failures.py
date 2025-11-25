@@ -13,6 +13,7 @@ from ..utils import DataclassException
 
 if TYPE_CHECKING:
     from .symbolic import SymbolicExpression, ResultQuantifier
+    from .entity import Match
 
 
 @dataclass
@@ -120,9 +121,7 @@ class UnSupportedOperand(UnsupportedOperation):
     """
 
     def __post_init__(self):
-        self.message = (
-            f"{self.unsupported_operand} cannot be used as an operand for {self.operation} operations."
-        )
+        self.message = f"{self.unsupported_operand} cannot be used as an operand for {self.operation} operations."
         super().__post_init__()
 
 

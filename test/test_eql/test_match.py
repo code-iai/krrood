@@ -1,5 +1,15 @@
-import operator
+import pytest
 
+from krrood.entity_query_language.entity import (
+    the,
+    entity_matching,
+    match,
+    entity,
+    let,
+    select,
+    an,
+)
+from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.symbolic import UnificationDict, SetOf
 from ..dataset.semantic_world_like_classes import (
     FixedConnection,
@@ -8,18 +18,6 @@ from ..dataset.semantic_world_like_classes import (
     Cabinet,
     Drawer,
 )
-from krrood.entity_query_language.entity import (
-    the,
-    entity_matching,
-    match,
-    entity,
-    let,
-    select,
-    match_any,
-    a,
-    an,
-)
-from krrood.entity_query_language.predicate import HasType
 
 
 def test_match(handles_and_containers_world):
@@ -43,8 +41,6 @@ def test_match(handles_and_containers_world):
     )
 
     assert fixed_connection_query == fixed_connection_query_manual
-
-    fixed_connection_query.visualize()
 
     fixed_connection = fixed_connection_query.evaluate()
     assert isinstance(fixed_connection, FixedConnection)
@@ -71,13 +67,30 @@ def test_select(handles_and_containers_world):
     assert answers[handle].name == "Handle1"
 
 
-def test_match_any(handles_and_containers_world):
+@pytest.fixture
+def world_and_cabinets_and_specific_drawer(handles_and_containers_world):
     world = handles_and_containers_world
-    drawer = the(
-        entity_matching(Drawer, world.views)(handle=match(Handle)(name="Handle1"))
+    my_drawer = Drawer(handle=Handle("Handle2"), container=Container("Container1"))
+    drawers = list(filter(lambda v: isinstance(v, Drawer), world.views))
+    my_cabinet_1 = Cabinet(
+        container=Container("container2"), drawers=[my_drawer] + drawers
     )
-    cabinet = the(entity_matching(Cabinet, world.views)(drawers=match_any(drawer)))
+    my_cabinet_2 = Cabinet(container=Container("container2"), drawers=[my_drawer])
+    my_cabinet_3 = Cabinet(container=Container("container2"), drawers=drawers)
+    return world, [my_cabinet_1, my_cabinet_2, my_cabinet_3], my_drawer
+
+
+def test_match_any(world_and_cabinets_and_specific_drawer):
+    world, cabinets, my_drawer = world_and_cabinets_and_specific_drawer
+    cabinet = an(entity_matching(Cabinet, cabinets)(drawers=match([my_drawer]).any))
+    found_cabinets = list(cabinet.evaluate())
+    assert len(found_cabinets) == 2
+    assert cabinets[0] in found_cabinets
+    assert cabinets[1] in found_cabinets
+
+
+def test_match_all(world_and_cabinets_and_specific_drawer):
+    world, cabinets, my_drawer = world_and_cabinets_and_specific_drawer
+    cabinet = the(entity_matching(Cabinet, cabinets)(drawers=[my_drawer]))
     found_cabinet = cabinet.evaluate()
-    assert found_cabinet.drawers[0].handle.name == "Handle1"
-    assert cabinet._child_._child_.operation is operator.contains
-    assert cabinet._child_._child_.right is drawer
+    assert found_cabinet is cabinets[1]

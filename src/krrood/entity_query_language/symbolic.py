@@ -52,7 +52,7 @@ from .result_quantification_constraint import (
 )
 from .rxnode import RWXNode, ColorLegend
 from .symbol_graph import SymbolGraph
-from .utils import IDGenerator, is_iterable, generate_combinations
+from .utils import IDGenerator, is_iterable, generate_combinations, make_list
 from ..class_diagrams import ClassRelation
 from ..class_diagrams.class_diagram import Association, WrappedClass
 from ..class_diagrams.failures import ClassIsUnMappedInClassDiagram
@@ -110,6 +110,10 @@ class OperationResult:
     @cached_property
     def is_true(self):
         return not self.is_false
+
+    @property
+    def operand_value(self):
+        return self.bindings[self.operand._id_]
 
     def __contains__(self, item):
         return item in self.bindings
@@ -1050,10 +1054,9 @@ class Literal(Variable[T]):
     ):
         original_data = data
         data = [data]
-        if not is_iterable(data):
-            data = HashedIterable([data])
         if not type_:
-            first_value = next(iter(data), None)
+            original_data_lst = make_list(original_data)
+            first_value = original_data_lst[0] if len(original_data_lst) > 0 else None
             type_ = type(first_value) if first_value else None
         if name is None:
             if type_:
