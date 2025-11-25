@@ -8,6 +8,7 @@ from krrood.entity_query_language.entity import (
     let,
     select,
     an,
+    match_any,
 )
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.symbolic import UnificationDict, SetOf
@@ -82,7 +83,7 @@ def world_and_cabinets_and_specific_drawer(handles_and_containers_world):
 
 def test_match_any(world_and_cabinets_and_specific_drawer):
     world, cabinets, my_drawer = world_and_cabinets_and_specific_drawer
-    cabinet = an(entity_matching(Cabinet, cabinets)(drawers=match([my_drawer]).any))
+    cabinet = an(entity_matching(Cabinet, cabinets)(drawers=match_any([my_drawer])))
     found_cabinets = list(cabinet.evaluate())
     assert len(found_cabinets) == 2
     assert cabinets[0] in found_cabinets

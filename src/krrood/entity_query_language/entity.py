@@ -402,18 +402,6 @@ class Match(Generic[T]):
         self.kwargs = kwargs
         return self
 
-    @property
-    def any(self) -> Union[Self, T, CanBehaveLikeAVariable[T]]:
-        """
-        This is useful only when the attribute and the assigned value (the current match instance) are both iterables.
-        Then this means that the intersection between the two iterables is not empty. i.e., at least one match between
-        the two iterables exists.
-
-        :return: The current match instance after marking it as an existential match.
-        """
-        self.existential = True
-        return self
-
     def _resolve(
         self,
         variable: Optional[CanBehaveLikeAVariable] = None,
@@ -738,6 +726,17 @@ def match(
     return _match_or_select(Match, type_)
 
 
+def match_any(
+    type_: Union[Type[T], CanBehaveLikeAVariable[T], Any, None] = None,
+) -> Union[Type[T], CanBehaveLikeAVariable[T], Match[T]]:
+    """
+    Equivalent to match(type_) but for existential checks.
+    """
+    match_ = match(type_)
+    match_.existential = True
+    return match_
+
+
 def select(
     type_: Union[Type[T], CanBehaveLikeAVariable[T], Any, None] = None,
 ) -> Union[Type[T], CanBehaveLikeAVariable[T], Select[T]]:
@@ -745,6 +744,17 @@ def select(
     Equivalent to match(type_) and selecting the variable to be included in the result.
     """
     return _match_or_select(Select, type_)
+
+
+def select_any(
+    type_: Union[Type[T], CanBehaveLikeAVariable[T], Any, None] = None,
+) -> Union[Type[T], CanBehaveLikeAVariable[T], Select[T]]:
+    """
+    Equivalent to select(type_) but for existential checks.
+    """
+    select_ = select(type_)
+    select_.existential = True
+    return select_
 
 
 def _match_or_select(
