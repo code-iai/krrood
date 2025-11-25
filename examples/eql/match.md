@@ -25,8 +25,12 @@ from dataclasses import dataclass
 from typing_extensions import List
 
 from krrood.entity_query_language.entity import (
-    let, entity, the,
-    match, entity_matching, Symbol,
+    let, entity, Symbol,
+)
+from krrood.entity_query_language.quantify_entity import the
+from krrood.entity_query_language.match import (
+    match,
+    entity_matching,
 )
 from krrood.entity_query_language.predicate import HasType
 
@@ -130,7 +134,7 @@ Use `select(Type)` when you want the matched inner objects to appear in the resu
 returns a mapping from the selected variables to the concrete objects (a unification dictionary).
 
 ```{code-cell} ipython3
-from krrood.entity_query_language.entity import select
+from krrood.entity_query_language.match import select
 
 container, handle = select(Container), select(Handle)
 fixed_connection_query = the(
@@ -154,7 +158,7 @@ Below we add two simple view classes and build a small scene of drawers and a ca
 ```{code-cell} ipython3
 from dataclasses import dataclass
 from typing_extensions import List
-from krrood.entity_query_language.entity import match_any
+from krrood.entity_query_language.match import match_any
 
 
 @dataclass
@@ -189,7 +193,7 @@ If you want to retrieve a specific element from a collection attribute while mat
 It behaves like `match_any(Type)` but also selects the matched element so you can access it in the result.
 
 ```{code-cell} ipython3
-from krrood.entity_query_language.entity import select_any
+from krrood.entity_query_language.match import select_any
 
 selected_drawer = select_any(Drawer)
 cabinet_with_selected_drawer = the(
@@ -208,7 +212,7 @@ Use `select(Type)` when you want the matched inner objects to appear in the resu
 returns a mapping from the selected variables to the concrete objects (a unification dictionary).
 
 ```{code-cell} ipython3
-from krrood.entity_query_language.entity import select
+from krrood.entity_query_language.match import select
 
 container, handle = select(Container), select(Handle)
 fixed_connection_query = the(
@@ -232,7 +236,7 @@ Below we add two simple view classes and build a small scene of drawers and a ca
 ```{code-cell} ipython3
 from dataclasses import dataclass
 from typing_extensions import List
-from krrood.entity_query_language.entity import match_any
+from krrood.entity_query_language.match import match_any
 
 
 @dataclass
@@ -267,7 +271,7 @@ If you want to retrieve a specific element from a collection attribute while mat
 It behaves like `match_any(Type)` but also selects the matched element so you can access it in the result.
 
 ```{code-cell} ipython3
-from krrood.entity_query_language.entity import select_any
+from krrood.entity_query_language.match import select_any
 
 selected_drawer = select_any(Drawer)
 cabinet_with_selected_drawer = the(

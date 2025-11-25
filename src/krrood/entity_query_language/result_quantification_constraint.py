@@ -12,7 +12,7 @@ from .failures import (
 )
 
 if TYPE_CHECKING:
-    from .symbolic import An, ResultQuantifier
+    from .symbolic import ResultQuantifier
 
 
 @dataclass
