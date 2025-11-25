@@ -13,7 +13,7 @@ from .custom_types import TypeType
 from .dao import AlternativeMapping
 from .sqlalchemy_generator import SQLAlchemyGenerator
 from .utils import InheritanceStrategy, module_and_class_name
-from .wrapped_table import WrappedTable
+from .wrapped_table import WrappedTable, AssociationTable
 from ..class_diagrams.class_diagram import (
     ClassDiagram,
     ClassRelation,
@@ -85,6 +85,11 @@ class ORMatic:
     )
     """
     The wrapped tables instances for the SQLAlchemy conversion.
+    """
+
+    association_tables: List[AssociationTable] = field(default_factory=list, init=False)
+    """
+    List of association tables for many-to-many relationships.
     """
 
     def __post_init__(self):

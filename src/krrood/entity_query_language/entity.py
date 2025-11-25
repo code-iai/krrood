@@ -59,7 +59,6 @@ from .predicate import (
     HasType,
 )
 
-
 ConditionType = Union[SymbolicExpression, bool, Predicate]
 """
 The possible types for conditions.

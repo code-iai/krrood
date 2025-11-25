@@ -2,13 +2,20 @@ from __future__ import annotations
 
 import datetime
 import inspect
+import json
 import types
 from contextlib import suppress
 from enum import Enum
 from types import ModuleType
 
 import sqlalchemy
-from sqlalchemy import Engine, text, MetaData
+from sqlalchemy import (
+    Engine,
+    text,
+    MetaData,
+    create_engine as create_sqlalchemy_engine,
+    URL,
+)
 from sqlalchemy.orm import DeclarativeBase
 from typing_extensions import (
     TypeVar,
@@ -19,9 +26,11 @@ from typing_extensions import (
     Union,
     Tuple,
     Dict,
+    Any,
 )
 
 from .dao import AlternativeMapping, DataAccessObject
+from ..adapters.json_serializer import to_json, from_json
 
 
 class classproperty:
@@ -179,3 +188,18 @@ def get_classes_of_ormatic_interface(
         type_mappings.update(cls.type_mappings)
 
     return classes, alternative_mappings, type_mappings
+
+
+def create_engine(url: Union[str, URL], **kwargs: Any) -> Engine:
+    """
+    Check https://docs.sqlalchemy.org/en/20/core/engines.html#sqlalchemy.create_engine for more information.
+
+    :param url: The database URL.
+    :return: An SQLAlchemy engine that uses the JSON (de)serializer from KRROOD.
+    """
+    return create_sqlalchemy_engine(
+        url,
+        json_serializer=lambda x: json.dumps(to_json(x)),
+        json_deserializer=lambda x: from_json(json.loads(x)),
+        **kwargs,
+    )

@@ -1,6 +1,7 @@
 import inspect
 import sys
 from dataclasses import dataclass
+from uuid import UUID
 
 from typing_extensions import List, Type, Generic, TYPE_CHECKING
 from typing_extensions import TypeVar, get_origin, get_args
@@ -19,6 +20,12 @@ def classes_of_module(module) -> List[Type]:
         if inspect.isclass(obj) and obj.__module__ == module.__name__:
             result.append(obj)
     return result
+
+
+def behaves_like_a_built_in_class(
+    clazz: Type,
+) -> bool:
+    return is_builtin_class(clazz) or clazz == UUID
 
 
 def is_builtin_class(clazz: Type) -> bool:

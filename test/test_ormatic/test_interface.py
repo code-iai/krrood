@@ -2,13 +2,14 @@ import pytest
 from sqlalchemy import select
 
 from krrood.ormatic.alternative_mappings import FunctionMapping, UncallableFunction
-from ..dataset.example_classes import *
-from ..dataset.ormatic_interface import *
 from krrood.ormatic.dao import (
     to_dao,
     is_data_column,
     NoDAOFoundError,
+    ToDAOState,
 )
+from ..dataset.example_classes import *
+from ..dataset.ormatic_interface import *
 
 
 def test_position(session, database):
@@ -538,3 +539,50 @@ def test_uuid(session, database):
 
     queried = session.scalars(select(UUIDWrapperDAO)).one()
     assert queried.identification == obj.identification
+
+
+def test_list_of_custom_type(session, database):
+    obj = UUIDWrapper(uuid.uuid4(), [uuid.uuid4(), uuid.uuid4()])
+    dao = to_dao(obj)
+
+    session.add(dao)
+    session.commit()
+
+    queried = session.scalars(select(UUIDWrapperDAO)).one()
+    assert queried.identification == obj.identification
+    assert queried.other_identifications == obj.other_identifications
+
+
+def test_json_integration(session, database):
+    obj = JSONWrapper(JSONSerializableClass(1, 2), [JSONSerializableClass(3, 4)])
+    dao = to_dao(obj)
+    session.add(dao)
+    session.commit()
+
+    queried = session.scalars(select(JSONWrapperDAO)).one()
+    reconstructed = queried.from_dao()
+    assert reconstructed == obj
+
+
+def test_many_to_many_with_same_type(session, database):
+
+    state = ToDAOState()
+    position = Position(1, 2, 3)
+    ps1 = Positions([position], ["a"])
+    ps2 = Positions([position], ["a"])
+
+    ps1_dao = to_dao(ps1, state)
+    ps2_dao = to_dao(ps2, state)
+
+    session.add_all([ps1_dao, ps2_dao])
+    session.commit()
+    session.expunge_all()
+
+    q1 = select(PositionDAO)
+    r = session.scalars(q1).all()
+    assert len(r) == 1
+
+    q = select(PositionsDAO)
+    r_ps1, r_ps2 = session.scalars(q).all()
+
+    assert r_ps1.positions[0] is r_ps2.positions[0]

@@ -26,6 +26,7 @@ parts:
     - file: ormatic/interface_usage
     - file: ormatic/eql_for_ormatic
     - file: ormatic/tips_and_tricks
+    - file: ormatic/json
 
 - caption: References
   chapters:

@@ -62,6 +62,48 @@ class ColumnConstructor:
 
 
 @dataclass
+class AssociationTable:
+    """
+    Represents an association table for many-to-many relationships in SQLAlchemy.
+    """
+
+    name: str
+    """
+    The name of the association table.
+    """
+
+    left_table_name: str
+    """
+    The name of the left (source) table.
+    """
+
+    left_foreign_key: str
+    """
+    The foreign key column name for the left table.
+    """
+
+    left_primary_key: str
+    """
+    The full primary key reference for the left table (e.g., 'TableName.primary_key').
+    """
+
+    right_table_name: str
+    """
+    The name of the right (target) table.
+    """
+
+    right_foreign_key: str
+    """
+    The foreign key column name for the right table.
+    """
+
+    right_primary_key: str
+    """
+    The full primary key reference for the right table (e.g., 'TableName.primary_key').
+    """
+
+
+@dataclass
 class WrappedTable:
     """
     A class that wraps a dataclass and contains all the information needed to create a SQLAlchemy table from it.
@@ -404,9 +446,13 @@ class WrappedTable:
             self.create_custom_type(wrapped_field)
 
         # handle JSON containers
-        elif wrapped_field.is_collection_of_builtins:
+        elif (
+            wrapped_field.is_collection_of_builtins
+            or wrapped_field.type_endpoint in self.ormatic.type_mappings
+            and wrapped_field.is_container
+        ):
             logger.info(f"Parsing as JSON.")
-            self.create_container_of_builtins(wrapped_field)
+            self.create_json_column(wrapped_field)
 
         # handle one to many relationships
         elif wrapped_field.is_one_to_many_relationship:
@@ -516,37 +562,47 @@ class WrappedTable:
 
     def create_one_to_many_relationship(self, wrapped_field: WrappedField):
         """
-        Creates a one-to-many relationship mapping for the given wrapped field.
-        The target side of the wrapped field gets a foreign key to this table with a unique name.
-        This table gets a relationship that joins the target table with the foreign key.
+        Creates a many-to-many relationship mapping for the given wrapped field using an association table.
+        This allows multiple instances of the source table to reference the same instances of the target table.
 
-        :param wrapped_field: The field for the one-to-many relationship.
+        :param wrapped_field: The field for the many-to-many relationship.
         """
 
         # get the target table
         target_wrapped_table = self.get_table_of_wrapped_field(wrapped_field)
 
-        # create a foreign key to this on the remote side
-        fk_name = f"{self.tablename.lower()}_{wrapped_field.field.name}{self.ormatic.foreign_key_postfix}"
-        fk_type = (
-            f"Mapped[{module_and_class_name(Optional)}[{module_and_class_name(int)}]]"
-        )
-        fk_column_constructor = f"mapped_column(ForeignKey('{self.full_primary_key_name}', use_alter=True), nullable=True, use_existing_column=True)"
-        target_wrapped_table.foreign_keys.append(
-            ColumnConstructor(fk_name, fk_type, fk_column_constructor)
+        # create association table name
+        association_table_name = f"{self.tablename.lower()}_{wrapped_field.field.name}_association"
+
+        # create foreign key names for the association table
+        left_fk_name = f"{self.tablename.lower()}{self.ormatic.foreign_key_postfix}"
+        right_fk_name = f"{target_wrapped_table.tablename.lower()}{self.ormatic.foreign_key_postfix}"
+
+        # create association table metadata
+        association_table = AssociationTable(
+            name=association_table_name,
+            left_table_name=self.tablename,
+            left_foreign_key=left_fk_name,
+            left_primary_key=self.full_primary_key_name,
+            right_table_name=target_wrapped_table.tablename,
+            right_foreign_key=right_fk_name,
+            right_primary_key=target_wrapped_table.full_primary_key_name,
         )
 
-        # create a relationship with a list to collect the other side
+        # add association table to ORMatic
+        self.ormatic.association_tables.append(association_table)
+
+        # create a relationship with a list using the association table
         rel_name = f"{wrapped_field.field.name}"
         rel_type = (
             f"Mapped[{module_and_class_name(List)}[{target_wrapped_table.tablename}]]"
         )
-        rel_constructor = f"relationship('{target_wrapped_table.tablename}', foreign_keys='[{target_wrapped_table.tablename}.{fk_name}]', post_update=True)"
+        rel_constructor = f"relationship('{target_wrapped_table.tablename}', secondary='{association_table_name}', cascade='save-update, merge')"
         self.relationships.append(
             ColumnConstructor(rel_name, rel_type, rel_constructor)
         )
 
-    def create_container_of_builtins(self, wrapped_field: WrappedField):
+    def create_json_column(self, wrapped_field: WrappedField):
         """
         Create a column for a list-like of built-in values.
 

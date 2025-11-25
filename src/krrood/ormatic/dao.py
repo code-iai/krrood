@@ -11,7 +11,7 @@ from typing import _GenericAlias
 import sqlalchemy.inspection
 import sqlalchemy.orm
 from sqlalchemy import Column
-from sqlalchemy.orm import MANYTOONE, ONETOMANY, RelationshipProperty
+from sqlalchemy.orm import MANYTOONE, MANYTOMANY, ONETOMANY, RelationshipProperty
 from typing_extensions import (
     Type,
     get_args,
@@ -90,9 +90,9 @@ class NoDAOFoundDuringParsingError(NoDAOFoundError):
     def __init__(self, obj: Any, dao: Type, relationship: RelationshipProperty = None):
         TypeError.__init__(
             self,
-            f"Class {type(obj)} does not have a DAO. This happened when trying"
+            f"Class {type(obj)} does not have a DAO. This happened when trying "
             f"to create a dao for {dao}) on the relationship {relationship} with the "
-            f"relationship value {obj}."
+            f"relationship value {obj}. "
             f"Expected a relationship value of type {relationship.target}.",
         )
 
@@ -330,7 +330,9 @@ class DataAccessObject(HasGeneric[T]):
         """
         if args and not kwargs:
             try:
-                mapper: sqlalchemy.orm.Mapper = sqlalchemy.inspection.inspect(type(self))
+                mapper: sqlalchemy.orm.Mapper = sqlalchemy.inspection.inspect(
+                    type(self)
+                )
                 data_columns = [c for c in mapper.columns if is_data_column(c)]
                 if len(args) == len(data_columns):
                     kwargs = {col.name: value for col, value in zip(data_columns, args)}
@@ -348,14 +350,26 @@ class DataAccessObject(HasGeneric[T]):
         def init_with_positional(self, *args, **kw):
             if args and not kw:
                 try:
-                    mapper: sqlalchemy.orm.Mapper = sqlalchemy.inspection.inspect(type(self))
+                    mapper: sqlalchemy.orm.Mapper = sqlalchemy.inspection.inspect(
+                        type(self)
+                    )
                     data_columns = [c for c in mapper.columns if is_data_column(c)]
                     if len(args) == len(data_columns):
-                        built = {col.name: value for col, value in zip(data_columns, args)}
-                        return original_init(self, **built) if original_init else super(cls, self).__init__(**built)
+                        built = {
+                            col.name: value for col, value in zip(data_columns, args)
+                        }
+                        return (
+                            original_init(self, **built)
+                            if original_init
+                            else super(cls, self).__init__(**built)
+                        )
                 except Exception:
                     pass
-            return original_init(self, *args, **kw) if original_init else super(cls, self).__init__(*args, **kw)
+            return (
+                original_init(self, *args, **kw)
+                if original_init
+                else super(cls, self).__init__(*args, **kw)
+            )
 
         # Inject only if the class did not already define a positional-friendly constructor
         cls.__init__ = init_with_positional
@@ -567,7 +581,7 @@ class DataAccessObject(HasGeneric[T]):
                     relationship=relationship,
                     state=state,
                 )
-            elif relationship.direction == ONETOMANY:
+            elif relationship.direction in (ONETOMANY, MANYTOMANY):
                 self._extract_collection_relationship(
                     obj=obj,
                     relationship=relationship,
@@ -713,7 +727,7 @@ class DataAccessObject(HasGeneric[T]):
                 if is_circular:
                     circular_refs[relationship.key] = value
                 rel_kwargs[relationship.key] = parsed
-            elif relationship.direction == ONETOMANY:
+            elif relationship.direction in (ONETOMANY, MANYTOMANY):
                 parsed_list, circular_list = state.parse_collection(value)
                 if circular_list:
                     circular_refs[relationship.key] = circular_list

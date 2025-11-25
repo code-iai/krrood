@@ -7,10 +7,11 @@ from datetime import datetime
 from enum import Enum
 from types import FunctionType
 
-from sqlalchemy import types, TypeDecorator
+from sqlalchemy import types, TypeDecorator, JSON
 from typing_extensions import Dict, Any, Sequence, Self
 from typing_extensions import List, Optional, Type
 
+from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
 from krrood.entity_query_language.predicate import Symbol
 from krrood.ormatic.dao import AlternativeMapping, T
 
@@ -555,3 +556,24 @@ def module_level_function():
 @dataclass
 class UUIDWrapper:
     identification: uuid.UUID
+
+    other_identifications: List[uuid.UUID] = field(default_factory=list)
+
+
+@dataclass
+class JSONSerializableClass(SubclassJSONSerializer):
+    a: float = 0.0
+    b: float = 1.0
+
+    def to_json(self) -> Dict[str, Any]:
+        return {**super().to_json(), "a": to_json(self.a), "b": to_json(self.b)}
+
+    @classmethod
+    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        return cls(a=from_json(data["a"]), b=from_json(data["b"]))
+
+
+@dataclass
+class JSONWrapper:
+    json_serializable_object: JSONSerializableClass
+    more_objects: List[JSONSerializableClass] = field(default_factory=list)
