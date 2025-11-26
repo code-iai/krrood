@@ -1330,6 +1330,15 @@ class Flatten(DomainMapping):
     def _name_(self):
         return f"Flatten({self._child_._name_})"
 
+    @property
+    def _is_iterable_(self):
+        """
+        Whether the selectable is iterable.
+
+        :return: True if the selectable is iterable, False otherwise.
+        """
+        return False
+
 
 @dataclass(eq=False, repr=False)
 class BinaryOperator(SymbolicExpression, ABC):

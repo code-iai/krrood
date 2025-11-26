@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Generic, Optional, Type, Dict, Any, List, Union, Self, Iterable
 
+from .failures import NoneWrappedFieldError
 from ..class_diagrams.wrapped_field import WrappedField
 from .entity import (
     ConditionType,
@@ -101,18 +102,52 @@ class Match(Generic[T]):
         """
         self._update_the_match_fields(variable, parent)
         for attr_name, attr_assigned_value in self.kwargs.items():
-            attr: Attribute = getattr(self.variable, attr_name)
-            attr_wrapped_field = attr._wrapped_field_
+            attr = self._get_attribute_and_update_selected_variables(
+                attr_name, attr_assigned_value
+            )
             if self.is_an_unresolved_match(attr_assigned_value):
                 self._resolve_child_match_and_merge_conditions(
-                    attr, attr_assigned_value, attr_wrapped_field
+                    attr, attr_assigned_value
                 )
             else:
-                if isinstance(attr_assigned_value, Select):
-                    self._update_selected_variables(attr)
                 self._add_proper_conditions_for_an_already_resolved_child_match(
-                    attr, attr_assigned_value, attr_wrapped_field
+                    attr, attr_assigned_value
                 )
+
+    def _get_attribute_and_update_selected_variables(
+        self, attr_name: str, attr_assigned_value: Any
+    ) -> Union[Attribute, Flatten]:
+        """
+        Get the attribute from the variable and update the selected variables with the attribute.
+
+        :param attr_name: The name of the attribute to get.
+        :param attr_assigned_value: The assigned value of the attribute.
+        :return: The attribute.
+        """
+        attr: Attribute = getattr(self.variable, attr_name)
+        if not attr._wrapped_field_:
+            raise NoneWrappedFieldError(self.variable._type_, attr_name)
+        if isinstance(attr_assigned_value, Select):
+            attr = self._update_attribute_and_selected_variables(
+                attr, attr_assigned_value
+            )
+        return attr
+
+    def _update_attribute_and_selected_variables(
+        self, attr: Attribute, attr_assigned_value: Select
+    ) -> Union[Attribute, Flatten]:
+        """
+        Update the attribute by flattening it if it is iterable, and update the selected variables with the attribute.
+
+        :param attr: The attribute to update.
+        :param attr_assigned_value: The assigned value of the attribute.
+        :return: The updated attribute..
+        """
+        if attr._is_iterable_:
+            attr = flatten(attr)
+        self._update_selected_variables(attr)
+        attr_assigned_value.update_selected_variable(attr)
+        return attr
 
     @staticmethod
     def is_an_unresolved_match(value: Any) -> bool:
@@ -128,17 +163,15 @@ class Match(Generic[T]):
         self,
         attr: Attribute,
         attr_assigned_value: Any,
-        attr_wrapped_field: WrappedField,
     ):
         """
         Add proper conditions for an already resolved child match. These could be an equal, or a containment condition.
 
         :param attr: A symbolic attribute of this match variable.
         :param attr_assigned_value:  The assigned value of the attribute, which can be a Match instance.
-        :param attr_wrapped_field: The WrappedField representing the attribute.
         """
         condition = self._get_either_a_containment_or_an_equal_condition(
-            attr, attr_assigned_value, attr_wrapped_field
+            attr, attr_assigned_value
         )
         self.conditions.append(condition)
 
@@ -146,20 +179,19 @@ class Match(Generic[T]):
         self,
         attr: Attribute,
         attr_assigned_value: Match,
-        attr_wrapped_field: WrappedField,
     ):
         """
         Resolve the child match and merge the conditions with the parent match.
 
         :param attr: A symbolic attribute of this match variable.
         :param attr_assigned_value: The assigned value of the attribute, which is a Match instance.
-        :param attr_wrapped_field: The WrappedField representing the attribute.
         """
-        attr = self._flatten_the_attribute_if_is_iterable_while_value_is_not(
-            attr, attr_assigned_value, attr_wrapped_field
-        )
+        type_filter_needed = self._is_type_filter_needed(attr, attr_assigned_value)
+        if attr._is_iterable_ and (attr_assigned_value.kwargs or type_filter_needed):
+            attr = flatten(attr)
         attr_assigned_value._resolve(attr, self)
-        self._add_type_filter_if_needed(attr, attr_assigned_value, attr_wrapped_field)
+        if type_filter_needed:
+            self._add_type_filter(attr, attr_assigned_value)
         self.conditions.extend(attr_assigned_value.conditions)
 
     def _update_the_match_fields(
@@ -194,7 +226,6 @@ class Match(Generic[T]):
         self,
         attr: Attribute,
         assigned_value: Any,
-        wrapped_field: Optional[WrappedField] = None,
     ) -> Comparator:
         """
         Find and return the appropriate condition for the attribute and its assigned value. This can be one of contains,
@@ -202,7 +233,6 @@ class Match(Generic[T]):
 
         :param attr: The attribute to check.
         :param assigned_value: The value assigned to the attribute.
-        :param wrapped_field: The WrappedField representing the attribute.
         :return: A comparator expression representing the condition.
         """
         assigned_variable = (
@@ -210,70 +240,41 @@ class Match(Generic[T]):
             if isinstance(assigned_value, Match)
             else assigned_value
         )
-        if self._attribute_is_iterable_while_the_value_is_not(
-            assigned_value, wrapped_field
-        ):
+        if self._attribute_is_iterable_while_the_value_is_not(assigned_value, attr):
             return contains(attr, assigned_variable)
-        elif self._value_is_iterable_while_the_attribute_is_not(
-            assigned_value, wrapped_field
-        ):
+        elif self._value_is_iterable_while_the_attribute_is_not(assigned_value, attr):
             return in_(attr, assigned_variable)
-        elif isinstance(assigned_value, Match) and assigned_value.existential:
-            return exists(attr, contains(assigned_variable, flatten(attr)))
+        elif attr._is_iterable_ and self._is_iterable_value(assigned_value):
+            flat_attr = flatten(attr) if not isinstance(attr, Flatten) else attr
+            return contains(assigned_variable, flat_attr)
         else:
             return attr == assigned_variable
 
     def _attribute_is_iterable_while_the_value_is_not(
         self,
         assigned_value: Any,
-        wrapped_field: Optional[WrappedField] = None,
+        attr: Union[Flatten, Attribute],
     ) -> bool:
         """
         Return True if the attribute is iterable while the assigned value is not an iterable.
 
         :param assigned_value: The value assigned to the attribute.
-        :param wrapped_field: The WrappedField representing the attribute.
+        :param attr: The attribute to check.
         """
-        return (
-            wrapped_field
-            and wrapped_field.is_iterable
-            and not self._is_iterable_value(assigned_value)
-        )
+        return attr._is_iterable_ and not self._is_iterable_value(assigned_value)
 
     def _value_is_iterable_while_the_attribute_is_not(
-        self, assigned_value: Any, wrapped_field: Optional[WrappedField] = None
+        self,
+        assigned_value: Any,
+        attr: Union[Flatten, Attribute],
     ) -> bool:
         """
         Return True if the assigned value is iterable while the attribute is not an iterable.
 
         :param assigned_value: The value assigned to the attribute.
-        :param wrapped_field: The WrappedField representing the attribute.
+        :param attr: The attribute to check.
         """
-        return (
-            wrapped_field
-            and not wrapped_field.is_iterable
-            and self._is_iterable_value(assigned_value)
-        )
-
-    def _flatten_the_attribute_if_is_iterable_while_value_is_not(
-        self,
-        attr: Attribute,
-        attr_assigned_value: Any,
-        attr_wrapped_field: Optional[WrappedField] = None,
-    ) -> Union[Attribute, Flatten]:
-        """
-        Apply a flatten operation to the attribute if it is an iterable while the assigned value is not an iterable.
-
-        :param attr: The attribute to flatten.
-        :param attr_assigned_value: The value assigned to the attribute.
-        :param attr_wrapped_field: The WrappedField representing the attribute.
-        :return: The flattened attribute if it is an iterable, else the original attribute.
-        """
-        if self._is_iterable_value(attr_assigned_value):
-            return attr
-        if attr_wrapped_field and attr_wrapped_field.is_iterable:
-            return flatten(attr)
-        return attr
+        return not attr._is_iterable_ and self._is_iterable_value(assigned_value)
 
     @staticmethod
     def _is_iterable_value(value) -> bool:
@@ -291,27 +292,26 @@ class Match(Generic[T]):
             return True
         return False
 
-    def _add_type_filter_if_needed(
+    def _add_type_filter(
         self,
         attr: Attribute,
         attr_match: Match,
-        attr_wrapped_field: Optional[WrappedField] = None,
     ):
         """
-        Adds a type filter to the match if needed. Basically when the type hint is not found or when it is
-        a superclass of the type provided in the match.
+        Adds a type filter to the match.
 
         :param attr: The attribute to filter.
         :param attr_match:The Match instance of the attribute.
-        :param attr_wrapped_field: The WrappedField representing the attribute.
-        :return:
         """
-        attr_type = attr_wrapped_field.type_endpoint if attr_wrapped_field else None
-        if (not attr_type) or (
-            (attr_match.type_ is not attr_type)
+        self.conditions.append(HasType(attr, attr_match.type_))
+
+    @staticmethod
+    def _is_type_filter_needed(attr: Attribute, attr_match: Match):
+        attr_type = attr._type_
+        return (not attr_type) or (
+            (attr_match.type_ and attr_match.type_ is not attr_type)
             and issubclass(attr_match.type_, attr_type)
-        ):
-            self.conditions.append(HasType(attr, attr_match.type_))
+        )
 
     def _get_or_create_variable(self) -> CanBehaveLikeAVariable[T]:
         """
@@ -377,7 +377,14 @@ class Select(Match[T], Selectable[T]):
         parent: Optional[Match] = None,
     ):
         super()._resolve(variable, parent)
-        self._var_ = self.variable
+        if not self._var_:
+            self.update_selected_variable(self.variable)
+
+    def update_selected_variable(self, variable: CanBehaveLikeAVariable):
+        """
+        Update the selected variable with the given one.
+        """
+        self._var_ = variable
 
     def _evaluate__(
         self,

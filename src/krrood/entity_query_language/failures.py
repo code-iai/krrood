@@ -189,3 +189,24 @@ class InvalidEntityType(UsageError):
             f"e.g. Entity, or SetOf"
         )
         super().__post_init__()
+
+
+@dataclass
+class ClassDiagramError(DataclassException):
+    """
+    An error related to the class diagram.
+    """
+
+
+@dataclass
+class NoneWrappedFieldError(ClassDiagramError):
+    """
+    Raised when a field of a class is not wrapped by a WrappedField.
+    """
+
+    clazz: Type
+    attr_name: str
+
+    def __post_init__(self):
+        self.message = f"Field '{self.attr_name}' of class '{self.clazz.__name__}' is not wrapped by a WrappedField."
+        super().__post_init__()
