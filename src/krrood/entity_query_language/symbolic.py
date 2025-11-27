@@ -1117,7 +1117,8 @@ class DomainMapping(CanBehaveLikeAVariable[T], ABC):
         :param current_value: The current value of this operation that is derived from the child result.
         :return: The operation result.
         """
-        self._is_false_ = not bool(current_value)
+        if isinstance(self._parent_, LogicalOperator) or self is self._conditions_root_:
+            self._is_false_ = not bool(current_value)
         return OperationResult(
             {**child_result.bindings, self._id_: current_value},
             self._is_false_,
