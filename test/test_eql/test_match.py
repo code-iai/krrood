@@ -5,7 +5,13 @@ from krrood.entity_query_language.entity import (
     let,
 )
 from krrood.entity_query_language.quantify_entity import an, the
-from krrood.entity_query_language.match import match, match_any, select, entity_matching
+from krrood.entity_query_language.match import (
+    match,
+    match_any,
+    select,
+    entity_matching,
+    match_all,
+)
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.symbolic import UnificationDict, SetOf
 from ..dataset.semantic_world_like_classes import (
@@ -88,7 +94,7 @@ def test_match_any(world_and_cabinets_and_specific_drawer):
 
 def test_match_all(world_and_cabinets_and_specific_drawer):
     world, cabinets, my_drawer = world_and_cabinets_and_specific_drawer
-    cabinet = the(entity_matching(Cabinet, cabinets)(drawers=[my_drawer]))
+    cabinet = the(entity_matching(Cabinet, cabinets)(drawers=match_all([my_drawer])))
     found_cabinet = cabinet.evaluate()
     assert found_cabinet is cabinets[1]
 
@@ -105,7 +111,7 @@ def test_match_any_on_collection_returns_unique_parent_entities():
     cabinet2 = Cabinet(container=other_c, drawers=[drawer2])
     views = [drawer1, drawer2, cabinet1, cabinet2]
 
-    q = an(entity_matching(Cabinet, views)(drawers=match_any({drawer1, drawer2})))
+    q = an(entity_matching(Cabinet, views)(drawers=match_any([drawer1, drawer2])))
 
     results = list(q.evaluate())
     # Expect exactly the two cabinets, no duplicates

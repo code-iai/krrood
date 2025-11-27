@@ -4,6 +4,9 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Generic, Optional, Type, Dict, Any, List, Union, Self, Iterable
 
+from krrood.entity_query_language.entity import for_all
+from krrood.entity_query_language.symbolic import ForAll, Exists
+
 from .failures import NoneWrappedFieldError
 from ..class_diagrams.wrapped_field import WrappedField
 from .entity import (
@@ -75,6 +78,10 @@ class Match(Generic[T]):
     existential: bool = field(default=False, kw_only=True)
     """
     Whether the match is an existential match check or not.
+    """
+    universal: bool = field(default=False, kw_only=True)
+    """
+    Whether the match is a universal match (i.e., must match for all values of the variable/attribute) check or not.
     """
 
     def __call__(self, **kwargs) -> Union[Self, T, CanBehaveLikeAVariable[T]]:
@@ -159,22 +166,6 @@ class Match(Generic[T]):
         """
         return isinstance(value, Match) and not value.variable
 
-    def _add_proper_conditions_for_an_already_resolved_child_match(
-        self,
-        attr: Attribute,
-        attr_assigned_value: Any,
-    ):
-        """
-        Add proper conditions for an already resolved child match. These could be an equal, or a containment condition.
-
-        :param attr: A symbolic attribute of this match variable.
-        :param attr_assigned_value:  The assigned value of the attribute, which can be a Match instance.
-        """
-        condition = self._get_either_a_containment_or_an_equal_condition(
-            attr, attr_assigned_value
-        )
-        self.conditions.append(condition)
-
     def _resolve_child_match_and_merge_conditions(
         self,
         attr: Attribute,
@@ -221,6 +212,45 @@ class Match(Generic[T]):
             self.parent._update_selected_variables(variable)
         else:
             self.selected_variables.append(variable)
+
+    def _add_proper_conditions_for_an_already_resolved_child_match(
+        self,
+        attr: Attribute,
+        attr_assigned_value: Any,
+    ):
+        """
+        Add proper conditions for an already resolved child match. These could be an equal, or a containment condition.
+
+        :param attr: A symbolic attribute of this match variable.
+        :param attr_assigned_value:  The assigned value of the attribute, which can be a Match instance.
+        """
+        condition = self._get_either_a_containment_or_an_equal_condition(
+            attr, attr_assigned_value
+        )
+        condition = self._update_condition_if_existential_or_universal(
+            attr, attr_assigned_value, condition
+        )
+        self.conditions.append(condition)
+
+    def _update_condition_if_existential_or_universal(
+        self,
+        attr: Union[Attribute, Flatten],
+        attr_assigned_value: Any,
+        condition: Comparator,
+    ) -> Union[Comparator, Exists, ForAll]:
+        """
+        Update the condition depending on whether it is an existential or universal check.
+
+        :param attr: The attribute on which the condition is applied.
+        :param condition: The condition to update.
+        :return: The updated condition.
+        """
+        if isinstance(attr_assigned_value, Match) and attr_assigned_value.existential:
+            attr = attr if not isinstance(attr, Flatten) else attr._child_
+            condition = exists(attr, condition)
+        elif isinstance(attr_assigned_value, Match) and attr_assigned_value.universal:
+            condition = for_all(attr, condition)
+        return condition
 
     def _get_either_a_containment_or_an_equal_condition(
         self,
@@ -426,6 +456,17 @@ def match_any(
     return match_
 
 
+def match_all(
+    type_: Union[Type[T], CanBehaveLikeAVariable[T], Any, None] = None,
+) -> Union[Type[T], CanBehaveLikeAVariable[T], Match[T]]:
+    """
+    Equivalent to match(type_) but for universal checks.
+    """
+    match_ = match(type_)
+    match_.universal = True
+    return match_
+
+
 def select(
     type_: Union[Type[T], CanBehaveLikeAVariable[T], Any, None] = None,
 ) -> Union[Type[T], CanBehaveLikeAVariable[T], Select[T]]:
@@ -443,6 +484,17 @@ def select_any(
     """
     select_ = select(type_)
     select_.existential = True
+    return select_
+
+
+def select_all(
+    type_: Union[Type[T], CanBehaveLikeAVariable[T], Any, None] = None,
+) -> Union[Type[T], CanBehaveLikeAVariable[T], Select[T]]:
+    """
+    Equivalent to select(type_) but for universal checks.
+    """
+    select_ = select(type_)
+    select_.universal = True
     return select_
 
 
