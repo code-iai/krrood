@@ -66,7 +66,7 @@ def symbolic_function(
     return wrapper
 
 
-@dataclass
+@dataclass(eq=False)
 class Symbol:
     """Base class for things that can be described by property descriptors."""
 
