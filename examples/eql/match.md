@@ -21,6 +21,7 @@ The following example shows how nested patterns translate
 into an equivalent manual query built with `entity(...)` and predicates.
 
 ```{code-cell} ipython3
+from krrood.entity_query_language.symbol_graph import SymbolGraph
 from dataclasses import dataclass
 from typing_extensions import List
 
@@ -65,7 +66,19 @@ class FixedConnection(Connection):
 @dataclass
 class World:
     connections: List[Connection]
+    
+@dataclass
+class Drawer(Symbol):
+    handle: Handle
+    container: Container
 
+
+@dataclass
+class Cabinet(Symbol):
+    container: Container
+    drawers: List[Drawer]
+
+SymbolGraph()
 
 # Build a small world with a few connections
 c1 = Container("Container1")
@@ -156,22 +169,7 @@ at least one element of the collection should satisfy the given pattern.
 Below we add two simple view classes and build a small scene of drawers and a cabinet.
 
 ```{code-cell} ipython3
-from dataclasses import dataclass
-from typing_extensions import List
 from krrood.entity_query_language.match import match_any
-
-
-@dataclass
-class Drawer(Symbol):
-    handle: Handle
-    container: Container
-
-
-@dataclass
-class Cabinet(Symbol):
-    container: Container
-    drawers: List[Drawer]
-
 
 # Build a simple set of views
 drawer1 = Drawer(handle=h1, container=c1)
@@ -203,7 +201,7 @@ cabinet_query = an(entity_matching(Cabinet, views)(drawers=selected_drawers))
 
 ans = list(cabinet_query.evaluate())
 assert len(ans) == 2
-print(ans[0][0].handle.name)
+print(ans)
 ```
 
 ## Selecting inner objects with `select()`
@@ -234,22 +232,7 @@ at least one element of the collection should satisfy the given pattern.
 Below we add two simple view classes and build a small scene of drawers and a cabinet.
 
 ```{code-cell} ipython3
-from dataclasses import dataclass
-from typing_extensions import List
 from krrood.entity_query_language.match import match_any
-
-
-@dataclass
-class Drawer(Symbol):
-    handle: Handle
-    container: Container
-
-
-@dataclass
-class Cabinet(Symbol):
-    container: Container
-    drawers: List[Drawer]
-
 
 # Build a simple set of views
 drawer1 = Drawer(handle=h1, container=c1)

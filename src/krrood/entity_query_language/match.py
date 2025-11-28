@@ -150,7 +150,7 @@ class Match(Generic[T]):
         :param attr_assigned_value: The assigned value of the attribute.
         :return: The updated attribute..
         """
-        if attr._is_iterable_:
+        if attr._is_iterable_ and not attr_assigned_value.existential:
             attr = flatten(attr)
         self._update_selected_variables(attr)
         attr_assigned_value.update_selected_variable(attr)

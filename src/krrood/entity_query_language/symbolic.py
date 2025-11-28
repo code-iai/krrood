@@ -1457,7 +1457,11 @@ class Comparator(BinaryOperator):
             operand_values.bindings[self.left._id_],
             operand_values.bindings[self.right._id_],
         )
-        if is_iterable(left_value.value) and is_iterable(right_value.value):
+        if (
+            self.operation in [operator.eq, operator.ne]
+            and is_iterable(left_value.value)
+            and is_iterable(right_value.value)
+        ):
             left_value = HashedValue(make_set(left_value.value))
             right_value = HashedValue(make_set(right_value.value))
         res = self.operation(left_value.value, right_value.value)
