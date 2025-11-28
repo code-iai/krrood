@@ -173,6 +173,16 @@ class Match(Generic[T]):
         return isinstance(value, Match) and value.existential
 
     @staticmethod
+    def is_a_universal_match(value: Any) -> bool:
+        """
+        Check whether the given value is a universal match.
+
+        :param value: The value to check.
+        :return: True if the value is a universal Match, else False.
+        """
+        return isinstance(value, Match) and value.universal
+
+    @staticmethod
     def is_an_unresolved_match(value: Any) -> bool:
         """
         Check whether the given value is an unresolved Match instance.
@@ -243,7 +253,6 @@ class Match(Generic[T]):
             if isinstance(assigned_value, Match)
             else assigned_value
         )
-        universal = isinstance(assigned_value, Match) and assigned_value.universal
         if attr._is_iterable_ and not self._is_iterable_value(assigned_value):
             return contains(attr, assigned_variable)
         elif not attr._is_iterable_ and self._is_iterable_value(assigned_value):
@@ -251,7 +260,7 @@ class Match(Generic[T]):
         elif (
             attr._is_iterable_
             and self._is_iterable_value(assigned_value)
-            and not universal
+            and not self.is_a_universal_match(assigned_value)
         ):
             flat_attr = flatten(attr) if not isinstance(attr, Flatten) else attr
             return contains(assigned_variable, flat_attr)
