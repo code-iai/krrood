@@ -178,6 +178,9 @@ class Match(Generic[T]):
 
 @dataclass
 class AttributeAssignment:
+    """
+    A class representing an attribute assignment in a Match statement.
+    """
 
     attr_name: str
     """
