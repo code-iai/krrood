@@ -110,87 +110,20 @@ class Match(Generic[T]):
         """
         self._update_the_match_fields(variable, parent)
         for attr_name, attr_assigned_value in self.kwargs.items():
-            attr = self._get_attribute(attr_name, attr_assigned_value)
+            attr_assignment = AttributeAssignment(
+                attr_name, self.variable, attr_assigned_value
+            )
             if isinstance(attr_assigned_value, Select):
-                self._update_selected_variables(attr)
-                attr_assigned_value.update_selected_variable(attr)
-            if self.is_an_unresolved_match(attr_assigned_value):
-                attr = self._apply_needed_filtrations_and_mappings_to_the_attribute(
-                    attr, attr_assigned_value
-                )
-                attr_assigned_value._resolve(attr, self)
-                self.conditions.extend(attr_assigned_value.conditions)
+                self._update_selected_variables(attr_assignment.attr)
+                attr_assigned_value.update_selected_variable(attr_assignment.attr)
+            if attr_assignment.is_an_unresolved_match:
+                attr_assignment.resolve(self)
+                self.conditions.extend(attr_assignment.conditions)
             else:
-                condition = self._get_either_a_containment_or_an_equal_condition(
-                    attr, attr_assigned_value
+                condition = (
+                    attr_assignment.infer_the_condition_between_the_attribute_and_its_assigned_value()
                 )
-                if self.is_an_existential_match(attr_assigned_value):
-                    condition = self._wrap_the_condition_in_an_exists_expression(
-                        attr, condition
-                    )
                 self.conditions.append(condition)
-
-    def _apply_needed_filtrations_and_mappings_to_the_attribute(
-        self, attr: Attribute, attr_assigned_value: Match
-    ) -> DomainMapping:
-        """
-        Apply needed filtrations and mappings to the attribute. This is can be flattening, and/or type filtering.
-
-        :param attr: The attribute to apply the filtrations and mappings to.
-        :param attr_assigned_value: The assigned value of the attribute which is a Match instance.
-        :return: The attribute after applying the filtrations and mappings.
-        """
-        type_filter_needed = self._is_type_filter_needed(attr, attr_assigned_value)
-        attr = self._flatten_attribute_if_needed(
-            attr, attr_assigned_value, type_filter_needed
-        )
-        if type_filter_needed:
-            self.conditions.append(HasType(attr, attr_assigned_value.type_))
-        return attr
-
-    def _get_attribute(self, attr_name: str, attr_assigned_value: Any) -> Attribute:
-        """
-        Get the attribute from the variable.
-
-        :param attr_name: The name of the attribute to get.
-        :param attr_assigned_value: The assigned value of the attribute.
-        :return: The attribute.
-        :raises NoneWrappedFieldError: If the attribute does not have a WrappedField.
-        """
-        attr: Attribute = getattr(self.variable, attr_name)
-        if not attr._wrapped_field_:
-            raise NoneWrappedFieldError(self.variable._type_, attr_name)
-        return attr
-
-    @staticmethod
-    def is_an_existential_match(value: Any) -> bool:
-        """
-        Check whether the given value is an existential match.
-
-        :param value: The value to check.
-        :return: True if the value is an existential Match, else False.
-        """
-        return isinstance(value, Match) and value.existential
-
-    @staticmethod
-    def is_a_universal_match(value: Any) -> bool:
-        """
-        Check whether the given value is a universal match.
-
-        :param value: The value to check.
-        :return: True if the value is a universal Match, else False.
-        """
-        return isinstance(value, Match) and value.universal
-
-    @staticmethod
-    def is_an_unresolved_match(value: Any) -> bool:
-        """
-        Check whether the given value is an unresolved Match instance.
-
-        :param value: The value to check.
-        :return: True if the value is an unresolved Match instance, else False.
-        """
-        return isinstance(value, Match) and not value.variable
 
     def _update_the_match_fields(
         self,
@@ -220,93 +153,6 @@ class Match(Generic[T]):
         else:
             self.selected_variables.append(variable)
 
-    @staticmethod
-    def _wrap_the_condition_in_an_exists_expression(
-        attr: Union[Attribute, Flatten],
-        condition: Comparator,
-    ) -> Exists:
-        """
-        Return an Exists expression wrapping the given condition.
-
-        :param attr: The attribute on which the condition is applied.
-        :param condition: The condition to update.
-        :return: The exists expression.
-        """
-        attr = attr if not isinstance(attr, Flatten) else attr._child_
-        return exists(attr, condition)
-
-    def _get_either_a_containment_or_an_equal_condition(
-        self,
-        attr: Attribute,
-        assigned_value: Any,
-    ) -> Comparator:
-        """
-        Find and return the appropriate condition for the attribute and its assigned value. This can be one of contains,
-        in_, or == depending on the type of the assigned value and the type of the attribute.
-
-        :param attr: The attribute to check.
-        :param assigned_value: The value assigned to the attribute.
-        :return: A comparator expression representing the condition.
-        """
-        assigned_variable = (
-            assigned_value.variable
-            if isinstance(assigned_value, Match)
-            else assigned_value
-        )
-        if attr._is_iterable_ and not self._is_iterable_value(assigned_value):
-            return contains(attr, assigned_variable)
-        elif not attr._is_iterable_ and self._is_iterable_value(assigned_value):
-            return in_(attr, assigned_variable)
-        elif (
-            attr._is_iterable_
-            and self._is_iterable_value(assigned_value)
-            and not self.is_a_universal_match(assigned_value)
-        ):
-            flat_attr = flatten(attr) if not isinstance(attr, Flatten) else attr
-            return contains(assigned_variable, flat_attr)
-        else:
-            return attr == assigned_variable
-
-    @staticmethod
-    def _is_iterable_value(value) -> bool:
-        """
-        Whether the value is an iterable or a Match instance with an iterable type.
-
-        :param value: The value to check.
-        :return: True if the value is an iterable or a Match instance with an iterable type, else False.
-        """
-        if isinstance(value, CanBehaveLikeAVariable):
-            return value._is_iterable_
-        elif not isinstance(value, Match) and is_iterable(value):
-            return True
-        elif isinstance(value, Match) and value._is_iterable_value(value.variable):
-            return True
-        return False
-
-    @staticmethod
-    def _flatten_attribute_if_needed(
-        attr: Attribute, attr_assigned_value: Match, type_filter_needed: bool
-    ) -> Union[Attribute, Flatten]:
-        """
-        Flatten the attribute if needed.
-
-        :param attr: The attribute to check.
-        :param attr_assigned_value: The assigned value of the attribute which is a Match instance.
-        :param type_filter_needed: Whether a type filter is needed for the attribute.
-        :return: True if flattening is needed, else False.
-        """
-        if attr._is_iterable_ and (attr_assigned_value.kwargs or type_filter_needed):
-            return flatten(attr)
-        return attr
-
-    @staticmethod
-    def _is_type_filter_needed(attr: Attribute, attr_match: Match):
-        attr_type = attr._type_
-        return (not attr_type) or (
-            (attr_match.type_ and attr_match.type_ is not attr_type)
-            and issubclass(attr_match.type_, attr_type)
-        )
-
     def _get_or_create_variable(self) -> CanBehaveLikeAVariable[T]:
         """
         Return the existing variable if it exists; otherwise, create a new variable with the given type and domain,
@@ -328,6 +174,160 @@ class Match(Generic[T]):
             if not self.selected_variables:
                 self.selected_variables.append(self.variable)
             return entity(self.selected_variables[0], *self.conditions)
+
+
+@dataclass
+class AttributeAssignment:
+
+    attr_name: str
+    """
+    The name of the attribute to assign the value to.
+    """
+    variable: CanBehaveLikeAVariable
+    """
+    The variable whose attribute is being assigned.
+    """
+    assigned_value: Union[Literal, Match]
+    """
+    The value to assign to the attribute, which can be a Match instance or a Literal.
+    """
+    conditions: List[ConditionType] = field(init=False, default_factory=list)
+    """
+    The conditions that define attribute assignment.
+    """
+
+    def resolve(self, parent_match: Match):
+        """
+        Resolve the attribute assignment by creating the conditions and applying the necessary mappings
+        to the attribute.
+
+        :param parent_match: The parent match of the attribute assignment.
+        """
+        possibly_flattened_attr = self.attr
+        if self.attr._is_iterable_ and (
+            self.assigned_value.kwargs or self.is_type_filter_needed
+        ):
+            possibly_flattened_attr = flatten(self.attr)
+
+        self.assigned_value._resolve(possibly_flattened_attr, parent_match)
+
+        if self.is_type_filter_needed:
+            self.conditions.append(
+                HasType(possibly_flattened_attr, self.assigned_value.type_)
+            )
+
+        self.conditions.extend(self.assigned_value.conditions)
+
+    def infer_the_condition_between_the_attribute_and_its_assigned_value(
+        self,
+    ) -> Union[Comparator, Exists]:
+        """
+        Find and return the appropriate condition for the attribute and its assigned value. This can be one of contains,
+        in_, or == depending on the type of the assigned value and the type of the attribute. In addition, if the
+        assigned value is a Match instance with an existential flag set, an Exists expression is created over the
+         comparator condition.
+
+        :return: A Comparator or an Exists expression representing the condition.
+        """
+        if self.attr._is_iterable_ and not self.is_iterable_value:
+            condition = contains(self.attr, self.assigned_variable)
+        elif not self.attr._is_iterable_ and self.is_iterable_value:
+            condition = in_(self.attr, self.assigned_variable)
+        elif (
+            self.attr._is_iterable_
+            and self.is_iterable_value
+            and not self.is_a_universal_match
+        ):
+            flat_attr = (
+                flatten(self.attr) if not isinstance(self.attr, Flatten) else self.attr
+            )
+            condition = contains(self.assigned_variable, flat_attr)
+        else:
+            condition = self.attr == self.assigned_variable
+
+        if self.is_an_existential_match:
+            attr = (
+                self.attr if not isinstance(self.attr, Flatten) else self.attr._child_
+            )
+            condition = exists(attr, condition)
+
+        return condition
+
+    @cached_property
+    def assigned_variable(self) -> CanBehaveLikeAVariable:
+        """
+        :return: The symbolic variable representing the assigned value.
+        """
+        return (
+            self.assigned_value.variable
+            if isinstance(self.assigned_value, Match)
+            else self.assigned_value
+        )
+
+    @cached_property
+    def attr(self) -> Attribute:
+        """
+        :return: the attribute of the variable.
+        :raises NoneWrappedFieldError: If the attribute does not have a WrappedField.
+        """
+        attr: Attribute = getattr(self.variable, self.attr_name)
+        if not attr._wrapped_field_:
+            raise NoneWrappedFieldError(self.variable._type_, self.attr_name)
+        return attr
+
+    @cached_property
+    def is_an_existential_match(self) -> bool:
+        """
+        :return: True if the value is an existential Match, else False.
+        """
+        return (
+            isinstance(self.assigned_value, Match) and self.assigned_value.existential
+        )
+
+    @cached_property
+    def is_a_universal_match(self) -> bool:
+        """
+        :return: True if the value is a universal Match, else False.
+        """
+        return isinstance(self.assigned_value, Match) and self.assigned_value.universal
+
+    @cached_property
+    def is_an_unresolved_match(self) -> bool:
+        """
+        :return: True if the value is an unresolved Match instance, else False.
+        """
+        return (
+            isinstance(self.assigned_value, Match) and not self.assigned_value.variable
+        )
+
+    @cached_property
+    def is_iterable_value(self) -> bool:
+        """
+        :return: True if the value is an iterable or a Match instance with an iterable type, else False.
+        """
+        if isinstance(self.assigned_value, CanBehaveLikeAVariable):
+            return self.assigned_value._is_iterable_
+        elif not isinstance(self.assigned_value, Match) and is_iterable(
+            self.assigned_value
+        ):
+            return True
+        elif (
+            isinstance(self.assigned_value, Match)
+            and self.assigned_value.variable._is_iterable_
+        ):
+            return True
+        return False
+
+    @cached_property
+    def is_type_filter_needed(self):
+        """
+        :return: True if a type filter condition is needed for the attribute assignment, else False.
+        """
+        attr_type = self.attr._type_
+        return (not attr_type) or (
+            (self.assigned_value.type_ and self.assigned_value.type_ is not attr_type)
+            and issubclass(self.assigned_value.type_, attr_type)
+        )
 
 
 @dataclass
