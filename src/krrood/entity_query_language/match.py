@@ -4,11 +4,8 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Generic, Optional, Type, Dict, Any, List, Union, Self, Iterable
 
-from krrood.entity_query_language.entity import for_all
 from krrood.entity_query_language.symbolic import ForAll, Exists
 
-from .failures import NoneWrappedFieldError
-from ..class_diagrams.wrapped_field import WrappedField
 from .entity import (
     ConditionType,
     contains,
@@ -20,6 +17,7 @@ from .entity import (
     DomainType,
     exists,
 )
+from .failures import NoneWrappedFieldError
 from .hashed_data import T, HashedValue
 from .predicate import HasType
 from .symbolic import (
@@ -28,7 +26,6 @@ from .symbolic import (
     Comparator,
     Flatten,
     QueryObjectDescriptor,
-    Variable,
     Selectable,
     SymbolicExpression,
     OperationResult,
@@ -352,7 +349,8 @@ class Match(Generic[T]):
 
     def _get_or_create_variable(self) -> CanBehaveLikeAVariable[T]:
         """
-        Create a variable with the given type if
+        Return the existing variable if it exists; otherwise, create a new variable with the given type and domain,
+         then return it.
         """
         if self.variable:
             return self.variable
