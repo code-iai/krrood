@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Generic, Optional, Type, Dict, Any, List, Union, Self, Iterable
 
-from krrood.entity_query_language.symbolic import ForAll, Exists
+from krrood.entity_query_language.symbolic import ForAll, Exists, DomainMapping
 
 from .entity import (
     ConditionType,
@@ -110,52 +110,67 @@ class Match(Generic[T]):
         """
         self._update_the_match_fields(variable, parent)
         for attr_name, attr_assigned_value in self.kwargs.items():
-            attr = self._get_attribute_and_update_selected_variables(
-                attr_name, attr_assigned_value
-            )
+            attr = self._get_attribute(attr_name, attr_assigned_value)
+            if isinstance(attr_assigned_value, Select):
+                self._update_selected_variables(attr)
+                attr_assigned_value.update_selected_variable(attr)
             if self.is_an_unresolved_match(attr_assigned_value):
-                self._resolve_child_match_and_merge_conditions(
+                attr = self._apply_needed_filtrations_and_mappings_to_the_attribute(
                     attr, attr_assigned_value
                 )
+                attr_assigned_value._resolve(attr, self)
+                self.conditions.extend(attr_assigned_value.conditions)
             else:
-                self._add_proper_conditions_for_an_already_resolved_child_match(
+                condition = self._get_either_a_containment_or_an_equal_condition(
                     attr, attr_assigned_value
                 )
+                if self.is_an_existential_match(attr_assigned_value):
+                    condition = self._wrap_the_condition_in_an_exists_expression(
+                        attr, condition
+                    )
+                self.conditions.append(condition)
 
-    def _get_attribute_and_update_selected_variables(
-        self, attr_name: str, attr_assigned_value: Any
-    ) -> Union[Attribute, Flatten]:
+    def _apply_needed_filtrations_and_mappings_to_the_attribute(
+        self, attr: Attribute, attr_assigned_value: Match
+    ) -> DomainMapping:
         """
-        Get the attribute from the variable and update the selected variables with the attribute.
+        Apply needed filtrations and mappings to the attribute. This is can be flattening, and/or type filtering.
+
+        :param attr: The attribute to apply the filtrations and mappings to.
+        :param attr_assigned_value: The assigned value of the attribute which is a Match instance.
+        :return: The attribute after applying the filtrations and mappings.
+        """
+        type_filter_needed = self._is_type_filter_needed(attr, attr_assigned_value)
+        attr = self._flatten_attribute_if_needed(
+            attr, attr_assigned_value, type_filter_needed
+        )
+        if type_filter_needed:
+            self.conditions.append(HasType(attr, attr_assigned_value.type_))
+        return attr
+
+    def _get_attribute(self, attr_name: str, attr_assigned_value: Any) -> Attribute:
+        """
+        Get the attribute from the variable.
 
         :param attr_name: The name of the attribute to get.
         :param attr_assigned_value: The assigned value of the attribute.
         :return: The attribute.
+        :raises NoneWrappedFieldError: If the attribute does not have a WrappedField.
         """
         attr: Attribute = getattr(self.variable, attr_name)
         if not attr._wrapped_field_:
             raise NoneWrappedFieldError(self.variable._type_, attr_name)
-        if isinstance(attr_assigned_value, Select):
-            attr = self._update_attribute_and_selected_variables(
-                attr, attr_assigned_value
-            )
         return attr
 
-    def _update_attribute_and_selected_variables(
-        self, attr: Attribute, attr_assigned_value: Select
-    ) -> Union[Attribute, Flatten]:
+    @staticmethod
+    def is_an_existential_match(value: Any) -> bool:
         """
-        Update the attribute by flattening it if it is iterable, and update the selected variables with the attribute.
+        Check whether the given value is an existential match.
 
-        :param attr: The attribute to update.
-        :param attr_assigned_value: The assigned value of the attribute.
-        :return: The updated attribute..
+        :param value: The value to check.
+        :return: True if the value is an existential Match, else False.
         """
-        if attr._is_iterable_ and not attr_assigned_value.existential:
-            attr = flatten(attr)
-        self._update_selected_variables(attr)
-        attr_assigned_value.update_selected_variable(attr)
-        return attr
+        return isinstance(value, Match) and value.existential
 
     @staticmethod
     def is_an_unresolved_match(value: Any) -> bool:
@@ -166,25 +181,6 @@ class Match(Generic[T]):
         :return: True if the value is an unresolved Match instance, else False.
         """
         return isinstance(value, Match) and not value.variable
-
-    def _resolve_child_match_and_merge_conditions(
-        self,
-        attr: Attribute,
-        attr_assigned_value: Match,
-    ):
-        """
-        Resolve the child match and merge the conditions with the parent match.
-
-        :param attr: A symbolic attribute of this match variable.
-        :param attr_assigned_value: The assigned value of the attribute, which is a Match instance.
-        """
-        type_filter_needed = self._is_type_filter_needed(attr, attr_assigned_value)
-        if attr._is_iterable_ and (attr_assigned_value.kwargs or type_filter_needed):
-            attr = flatten(attr)
-        attr_assigned_value._resolve(attr, self)
-        if type_filter_needed:
-            self._add_type_filter(attr, attr_assigned_value)
-        self.conditions.extend(attr_assigned_value.conditions)
 
     def _update_the_match_fields(
         self,
@@ -214,42 +210,20 @@ class Match(Generic[T]):
         else:
             self.selected_variables.append(variable)
 
-    def _add_proper_conditions_for_an_already_resolved_child_match(
-        self,
-        attr: Attribute,
-        attr_assigned_value: Any,
-    ):
-        """
-        Add proper conditions for an already resolved child match. These could be an equal, or a containment condition.
-
-        :param attr: A symbolic attribute of this match variable.
-        :param attr_assigned_value:  The assigned value of the attribute, which can be a Match instance.
-        """
-        condition = self._get_either_a_containment_or_an_equal_condition(
-            attr, attr_assigned_value
-        )
-        condition = self._update_condition_if_existential(
-            attr, attr_assigned_value, condition
-        )
-        self.conditions.append(condition)
-
-    def _update_condition_if_existential(
-        self,
+    @staticmethod
+    def _wrap_the_condition_in_an_exists_expression(
         attr: Union[Attribute, Flatten],
-        attr_assigned_value: Any,
         condition: Comparator,
-    ) -> Union[Comparator, Exists, ForAll]:
+    ) -> Exists:
         """
-        Update the condition depending if it is an existential.
+        Return an Exists expression wrapping the given condition.
 
         :param attr: The attribute on which the condition is applied.
         :param condition: The condition to update.
-        :return: The updated condition.
+        :return: The exists expression.
         """
-        if isinstance(attr_assigned_value, Match) and attr_assigned_value.existential:
-            attr = attr if not isinstance(attr, Flatten) else attr._child_
-            condition = exists(attr, condition)
-        return condition
+        attr = attr if not isinstance(attr, Flatten) else attr._child_
+        return exists(attr, condition)
 
     def _get_either_a_containment_or_an_equal_condition(
         self,
@@ -326,18 +300,21 @@ class Match(Generic[T]):
             return True
         return False
 
-    def _add_type_filter(
-        self,
-        attr: Attribute,
-        attr_match: Match,
-    ):
+    @staticmethod
+    def _flatten_attribute_if_needed(
+        attr: Attribute, attr_assigned_value: Match, type_filter_needed: bool
+    ) -> Union[Attribute, Flatten]:
         """
-        Adds a type filter to the match.
+        Flatten the attribute if needed.
 
-        :param attr: The attribute to filter.
-        :param attr_match:The Match instance of the attribute.
+        :param attr: The attribute to check.
+        :param attr_assigned_value: The assigned value of the attribute which is a Match instance.
+        :param type_filter_needed: Whether a type filter is needed for the attribute.
+        :return: True if flattening is needed, else False.
         """
-        self.conditions.append(HasType(attr, attr_match.type_))
+        if attr._is_iterable_ and (attr_assigned_value.kwargs or type_filter_needed):
+            return flatten(attr)
+        return attr
 
     @staticmethod
     def _is_type_filter_needed(attr: Attribute, attr_match: Match):

@@ -226,7 +226,8 @@ print(answers[container].name, answers[handle].name)
 
 ## Existential matches in collections with `match_any()`
 
-When matching a container-like attribute (for example, a list), use `match_any(pattern)` to express that
+When having multiple possible matches, and you care only if at least the attribute matches one possibility, use
+`match_any(IterableOfPossibleValues)` to express that
 at least one element of the collection should satisfy the given pattern.
 
 Below we add two simple view classes and build a small scene of drawers and a cabinet.

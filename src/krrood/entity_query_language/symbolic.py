@@ -113,9 +113,7 @@ class OperationResult:
 
     @property
     def value(self) -> Optional[HashedValue]:
-        if self.operand._id_ in self:
-            return self[self.operand._id_]
-        return None
+        return self.bindings.get(self.operand._id_, None)
 
     def __contains__(self, item):
         return item in self.bindings
