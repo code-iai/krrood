@@ -244,9 +244,9 @@ class Match(Generic[T]):
             else assigned_value
         )
         universal = isinstance(assigned_value, Match) and assigned_value.universal
-        if self._attribute_is_iterable_while_the_value_is_not(assigned_value, attr):
+        if attr._is_iterable_ and not self._is_iterable_value(assigned_value):
             return contains(attr, assigned_variable)
-        elif self._value_is_iterable_while_the_attribute_is_not(assigned_value, attr):
+        elif not attr._is_iterable_ and self._is_iterable_value(assigned_value):
             return in_(attr, assigned_variable)
         elif (
             attr._is_iterable_
@@ -257,32 +257,6 @@ class Match(Generic[T]):
             return contains(assigned_variable, flat_attr)
         else:
             return attr == assigned_variable
-
-    def _attribute_is_iterable_while_the_value_is_not(
-        self,
-        assigned_value: Any,
-        attr: Union[Flatten, Attribute],
-    ) -> bool:
-        """
-        Return True if the attribute is iterable while the assigned value is not an iterable.
-
-        :param assigned_value: The value assigned to the attribute.
-        :param attr: The attribute to check.
-        """
-        return attr._is_iterable_ and not self._is_iterable_value(assigned_value)
-
-    def _value_is_iterable_while_the_attribute_is_not(
-        self,
-        assigned_value: Any,
-        attr: Union[Flatten, Attribute],
-    ) -> bool:
-        """
-        Return True if the assigned value is iterable while the attribute is not an iterable.
-
-        :param assigned_value: The value assigned to the attribute.
-        :param attr: The attribute to check.
-        """
-        return not attr._is_iterable_ and self._is_iterable_value(assigned_value)
 
     @staticmethod
     def _is_iterable_value(value) -> bool:
