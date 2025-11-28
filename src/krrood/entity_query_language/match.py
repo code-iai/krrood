@@ -227,19 +227,19 @@ class Match(Generic[T]):
         condition = self._get_either_a_containment_or_an_equal_condition(
             attr, attr_assigned_value
         )
-        condition = self._update_condition_if_existential_or_universal(
+        condition = self._update_condition_if_existential(
             attr, attr_assigned_value, condition
         )
         self.conditions.append(condition)
 
-    def _update_condition_if_existential_or_universal(
+    def _update_condition_if_existential(
         self,
         attr: Union[Attribute, Flatten],
         attr_assigned_value: Any,
         condition: Comparator,
     ) -> Union[Comparator, Exists, ForAll]:
         """
-        Update the condition depending on whether it is an existential or universal check.
+        Update the condition depending if it is an existential.
 
         :param attr: The attribute on which the condition is applied.
         :param condition: The condition to update.
@@ -248,8 +248,6 @@ class Match(Generic[T]):
         if isinstance(attr_assigned_value, Match) and attr_assigned_value.existential:
             attr = attr if not isinstance(attr, Flatten) else attr._child_
             condition = exists(attr, condition)
-        elif isinstance(attr_assigned_value, Match) and attr_assigned_value.universal:
-            condition = for_all(attr, condition)
         return condition
 
     def _get_either_a_containment_or_an_equal_condition(
@@ -270,11 +268,16 @@ class Match(Generic[T]):
             if isinstance(assigned_value, Match)
             else assigned_value
         )
+        universal = isinstance(assigned_value, Match) and assigned_value.universal
         if self._attribute_is_iterable_while_the_value_is_not(assigned_value, attr):
             return contains(attr, assigned_variable)
         elif self._value_is_iterable_while_the_attribute_is_not(assigned_value, attr):
             return in_(attr, assigned_variable)
-        elif attr._is_iterable_ and self._is_iterable_value(assigned_value):
+        elif (
+            attr._is_iterable_
+            and self._is_iterable_value(assigned_value)
+            and not universal
+        ):
             flat_attr = flatten(attr) if not isinstance(attr, Flatten) else attr
             return contains(assigned_variable, flat_attr)
         else:

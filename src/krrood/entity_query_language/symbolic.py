@@ -52,7 +52,7 @@ from .result_quantification_constraint import (
 )
 from .rxnode import RWXNode, ColorLegend
 from .symbol_graph import SymbolGraph
-from .utils import IDGenerator, is_iterable, generate_combinations, make_list
+from .utils import IDGenerator, is_iterable, generate_combinations, make_list, make_set
 from ..class_diagrams import ClassRelation
 from ..class_diagrams.class_diagram import Association, WrappedClass
 from ..class_diagrams.failures import ClassIsUnMappedInClassDiagram
@@ -110,6 +110,12 @@ class OperationResult:
     @cached_property
     def is_true(self):
         return not self.is_false
+
+    @property
+    def value(self) -> Optional[HashedValue]:
+        if self.operand._id_ in self:
+            return self[self.operand._id_]
+        return None
 
     def __contains__(self, item):
         return item in self.bindings
@@ -1447,9 +1453,14 @@ class Comparator(BinaryOperator):
         )
 
     def apply_operation(self, operand_values: OperationResult) -> bool:
-        res = self.operation(
-            operand_values[self.left._id_].value, operand_values[self.right._id_].value
+        left_value, right_value = (
+            operand_values.bindings[self.left._id_],
+            operand_values.bindings[self.right._id_],
         )
+        if is_iterable(left_value.value) and is_iterable(right_value.value):
+            left_value = HashedValue(make_set(left_value.value))
+            right_value = HashedValue(make_set(right_value.value))
+        res = self.operation(left_value.value, right_value.value)
         self._is_false_ = not res
         operand_values[self._id_] = HashedValue(res)
         return res
