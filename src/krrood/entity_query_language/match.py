@@ -49,6 +49,10 @@ class Match(Generic[T]):
     """
     The type of the variable.
     """
+    domain: DomainType = field(default=None, kw_only=True)
+    """
+    The domain to use for the variable created by the match.
+    """
     kwargs: Dict[str, Any] = field(init=False, default_factory=dict)
     """
     The keyword arguments to match against.
@@ -352,7 +356,7 @@ class Match(Generic[T]):
         """
         if self.variable:
             return self.variable
-        return let(self.type_, None)
+        return let(self.type_, self.domain)
 
     @cached_property
     def expression(self) -> QueryObjectDescriptor[T]:
@@ -366,26 +370,6 @@ class Match(Generic[T]):
             if not self.selected_variables:
                 self.selected_variables.append(self.variable)
             return entity(self.selected_variables[0], *self.conditions)
-
-
-@dataclass
-class MatchEntity(Match[T]):
-    """
-    A match that can also take a domain and should be used as the outermost match in a nested match statement.
-    This is because the inner match statements derive their domain from the outer match as they are basically attributes
-    of the outer match variable.
-    """
-
-    domain: DomainType = None
-    """
-    The domain to use for the variable created by the match.
-    """
-
-    def _get_or_create_variable(self) -> Variable[T]:
-        """
-        Create a variable with the given type and domain.
-        """
-        return let(self.type_, self.domain)
 
 
 @dataclass
@@ -501,33 +485,48 @@ def select_all(
     return select_
 
 
-def _match_or_select(
-    match_type: Type[Match],
-    type_: Union[Type[T], CanBehaveLikeAVariable[T], Any, None] = None,
-) -> Union[Type[T], CanBehaveLikeAVariable[T], Match[T]]:
-    """
-    Create and return a Match/Select instance that looks for the pattern provided by the type and the
-    keyword arguments.
-    """
-    if isinstance(type_, CanBehaveLikeAVariable):
-        return Select(type_._type_, variable=type_)
-    elif type_ and not isinstance(type_, type):
-        return match_type(type_=type_, variable=Literal(type_))
-    return match_type(type_)
-
-
 def entity_matching(
     type_: Union[Type[T], CanBehaveLikeAVariable[T]], domain: DomainType
 ) -> Union[Type[T], CanBehaveLikeAVariable[T], MatchEntity[T]]:
     """
-    Same as :py:func:`krrood.entity_query_language.entity.match` but with a domain to use for the variable created
+    Same as :py:func:`krrood.entity_query_language.match.match` but with a domain to use for the variable created
      by the match.
 
     :param type_: The type of the variable (i.e., The class you want to instantiate).
     :param domain: The domain used for the variable created by the match.
     :return: The MatchEntity instance.
     """
-    return MatchEntity(type_, domain)
+    return _match_or_select(Match, type_=type_, domain=domain)
+
+
+def entity_selection(
+    type_: Union[Type[T], CanBehaveLikeAVariable[T]], domain: DomainType
+) -> Union[Type[T], CanBehaveLikeAVariable[T], MatchEntity[T]]:
+    """
+    Same as :py:func:`krrood.entity_query_language.match.entity_matching` but also selecting the variable to be
+     included in the result.
+    """
+    return _match_or_select(Select, type_=type_, domain=domain)
+
+
+def _match_or_select(
+    match_type: Type[Match],
+    type_: Union[Type[T], CanBehaveLikeAVariable[T], Any, None] = None,
+    domain: Optional[DomainType] = None,
+) -> Union[Type[T], CanBehaveLikeAVariable[T], Match[T]]:
+    """
+    Create and return a Match/Select instance that looks for the pattern provided by the type and the
+    keyword arguments.
+
+    :param match_type: The type of the match to create (Match or Select).
+    :param type_: The type of the variable (i.e., The class you want to instantiate).
+    :param domain: The domain used for the variable created by the match.
+    """
+    if isinstance(type_, CanBehaveLikeAVariable):
+        return match_type(type_._type_, domain=domain, variable=type_)
+    elif type_ and not isinstance(type_, type):
+        return match_type(type_, domain=domain, variable=Literal(type_))
+    return match_type(type_)
 
 
 EntityType = Union[SetOf[T], Entity[T], T, Iterable[T], Type[T], Match[T]]

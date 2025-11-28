@@ -981,6 +981,11 @@ class Variable(CanBehaveLikeAVariable[T]):
         self._eval_parent_ = parent
         sources = sources or {}
         if self._id_ in sources:
+            if (
+                isinstance(self._parent_, LogicalBinaryOperator)
+                or self is self._conditions_root_
+            ):
+                self._is_false_ = not bool(sources[self._id_])
             yield OperationResult(sources, not bool(sources[self._id_]), self)
         elif self._domain_:
             for v in self._domain_:
@@ -1267,7 +1272,7 @@ class Attribute(DomainMapping):
             return None
 
     def _apply_mapping_(self, value: HashedValue) -> Iterable[HashedValue]:
-        yield HashedValue(id_=value.id_, value=getattr(value.value, self._attr_name_))
+        yield HashedValue(getattr(value.value, self._attr_name_))
 
     @property
     def _name_(self):
@@ -1791,11 +1796,11 @@ class Exists(QuantifiedConditional):
     ) -> Iterable[OperationResult]:
         sources = sources or {}
         self._eval_parent_ = parent
-        seen_var_values = set()
+        seen_var_values = []
         for val in self.condition._evaluate__(sources, parent=self):
             var_val = val[self.variable._id_]
-            if val.is_true and var_val not in seen_var_values:
-                seen_var_values.add(var_val)
+            if val.is_true and var_val.value not in seen_var_values:
+                seen_var_values.append(var_val.value)
                 yield OperationResult(val.bindings, False, self)
 
     def __invert__(self):

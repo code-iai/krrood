@@ -256,13 +256,14 @@ If you want to retrieve a specific element from a collection attribute while mat
 It behaves like `match_any(Type)` but also selects the matched element so you can access it in the result.
 
 ```{code-cell} ipython3
-from krrood.entity_query_language.match import select_any
+from krrood.entity_query_language.match import select_any, entity_selection
 
 selected_drawers = select_any([drawer1, drawer2])
 # Query: find the cabinet that has any drawer from the set {drawer1, drawer2}
-cabinet_query = an(entity_matching(Cabinet, views)(drawers=selected_drawers))
+cabinet = entity_selection(Cabinet, views)
+cabinet_query = an(cabinet(drawers=selected_drawers))
 
 ans = list(cabinet_query.evaluate())
 assert len(ans) == 2
-print(ans[0][0].handle.name)
+print(ans)
 ```
