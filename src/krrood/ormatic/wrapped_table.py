@@ -11,6 +11,7 @@ from .utils import InheritanceStrategy, module_and_class_name
 from ..class_diagrams.class_diagram import (
     WrappedClass,
 )
+from ..class_diagrams.failures import ClassIsUnMappedInClassDiagram
 from ..class_diagrams.wrapped_field import WrappedField
 
 if TYPE_CHECKING:
@@ -277,18 +278,40 @@ class WrappedTable:
         key = self._to_wrapped_tables_key(resolved_parent_wrapped)
         return self.ormatic.wrapped_tables.get(key)
 
-    # ---------------------------- helper methods ---------------------------- #
+    # %% helper methods
 
     def _find_direct_parent_wrapped(self) -> Optional[WrappedClass]:
-        """Return the directly inherited parent ``WrappedClass`` if present.
+        """Return the first mapped parent ``WrappedClass`` from the MRO.
 
-        This uses the inheritance graph edges between the concrete wrapped
-        classes to find a predecessor.
+        This iterates through the MRO (Method Resolution Order) of the class
+        and returns the first parent class that has a corresponding wrapped table.
         """
-        parents = self.ormatic.inheritance_graph.predecessors(self.wrapped_clazz.index)
-        if len(parents) == 0:
-            return None
-        return self.ormatic.class_dependency_graph._dependency_graph[parents[0]]
+        # Get the actual class from wrapped_clazz
+        current_class = self.wrapped_clazz.clazz
+
+        # Iterate through MRO, skipping the first element (the class itself)
+        for parent_class in current_class.__mro__[1:]:
+            # Skip object base class
+            if parent_class is object:
+                continue
+
+            # Try to get the wrapped class for this parent
+            try:
+                parent_wrapped = self.ormatic.class_dependency_graph.get_wrapped_class(
+                    parent_class
+                )
+            except ClassIsUnMappedInClassDiagram:
+                # Skip classes that are not in the class diagram
+                continue
+
+            # Check if this wrapped class exists in wrapped_tables
+            if (
+                parent_wrapped is not None
+                and parent_wrapped in self.ormatic.wrapped_tables
+            ):
+                return parent_wrapped
+
+        return None
 
     def _original_wrapped_for_mapping(
         self, mapping_wrapped: WrappedClass
@@ -572,7 +595,9 @@ class WrappedTable:
         target_wrapped_table = self.get_table_of_wrapped_field(wrapped_field)
 
         # create association table name
-        association_table_name = f"{self.tablename.lower()}_{wrapped_field.field.name}_association"
+        association_table_name = (
+            f"{self.tablename.lower()}_{wrapped_field.field.name}_association"
+        )
 
         # create foreign key names for the association table
         left_fk_name = f"{self.tablename.lower()}{self.ormatic.foreign_key_postfix}"

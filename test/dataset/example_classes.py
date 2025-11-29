@@ -510,6 +510,8 @@ class InheritanceLevel2WithoutSymbolButAlternativelyMappedMapping(
 class ParentAlternativelyMapped:
     base_attribute: float = 0
 
+    entities: List[Entity] = field(default_factory=list)
+
 
 @dataclass
 class ChildLevel1NormallyMapped(ParentAlternativelyMapped):
@@ -524,13 +526,17 @@ class ChildLevel2NormallyMapped(ChildLevel1NormallyMapped):
 @dataclass
 class ParentAlternativelyMappedMapping(AlternativeMapping[ParentAlternativelyMapped]):
     derived_attribute: str
+    entities: List[Entity]
 
     @classmethod
     def create_instance(cls, obj: T) -> Self:
-        return cls(str(obj.base_attribute))
+        return cls(str(obj.base_attribute), obj.entities)
 
     def create_from_dao(self) -> T:
         raise NotImplementedError
+
+
+# %% Function like classes for testing
 
 
 @dataclass
@@ -560,6 +566,9 @@ class UUIDWrapper:
     other_identifications: List[uuid.UUID] = field(default_factory=list)
 
 
+# %% Test JSON serialization in ORM classes
+
+
 @dataclass
 class JSONSerializableClass(SubclassJSONSerializer):
     a: float = 0.0
@@ -577,3 +586,21 @@ class JSONSerializableClass(SubclassJSONSerializer):
 class JSONWrapper:
     json_serializable_object: JSONSerializableClass
     more_objects: List[JSONSerializableClass] = field(default_factory=list)
+
+
+# %% Multiple inheritance and MRO tests
+
+
+@dataclass
+class Mixin:
+    mixin_attribute: str
+
+
+@dataclass
+class PrimaryBase:
+    primary_attribute: str
+
+
+@dataclass
+class MultipleInheritance(PrimaryBase, Mixin):
+    extra_attribute: str

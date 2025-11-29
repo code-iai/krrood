@@ -475,10 +475,18 @@ def test_inheritance_mapper_args(session, database):
 
 
 def test_to_dao_alternatively_mapped_parent(session, database):
-    ch2 = ChildLevel2NormallyMapped(1, 2, 3)
+    ch2 = ChildLevel2NormallyMapped(1, [Entity("a")], 2, 3)
     ch2_dao = to_dao(ch2)
 
-    assert ch2_dao == ChildLevel2NormallyMappedDAO("1", 2, 3)
+    assert isinstance(ch2_dao.entities[0], CustomEntityDAO)
+    assert ch2_dao.entities == [CustomEntityDAO(overwritten_name="a")]
+
+    assert ch2_dao == ChildLevel2NormallyMappedDAO(
+        derived_attribute="1",
+        entities=[CustomEntityDAO(overwritten_name="a")],
+        level_one_attribute=2,
+        level_two_attribute=3,
+    )
 
 
 def test_callable_alternative_mapping():
@@ -586,3 +594,20 @@ def test_many_to_many_with_same_type(session, database):
     r_ps1, r_ps2 = session.scalars(q).all()
 
     assert r_ps1.positions[0] is r_ps2.positions[0]
+
+
+def test_multiple_inheritance(session, database):
+    assert issubclass(MultipleInheritanceDAO, PrimaryBaseDAO)
+    obj = MultipleInheritance(
+        primary_attribute="p", mixin_attribute="m", extra_attribute="e"
+    )
+    dao = to_dao(obj)
+    assert hasattr(dao, "extra_attribute")
+    assert hasattr(dao, "mixin_attribute")
+    assert hasattr(dao, "primary_attribute")
+    session.add(dao)
+    session.commit()
+
+    queried = session.scalars(select(MultipleInheritanceDAO)).one()
+    reconstructed = queried.from_dao()
+    assert reconstructed == obj

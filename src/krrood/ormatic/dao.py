@@ -12,6 +12,7 @@ import sqlalchemy.inspection
 import sqlalchemy.orm
 from sqlalchemy import Column
 from sqlalchemy.orm import MANYTOONE, MANYTOMANY, ONETOMANY, RelationshipProperty
+from sqlalchemy.util import ReadOnlyProperties
 from typing_extensions import (
     Type,
     get_args,
@@ -23,6 +24,7 @@ from typing_extensions import (
     Optional,
     List,
     Iterable,
+    Tuple,
 )
 
 from ..utils import recursive_subclasses
@@ -527,16 +529,41 @@ class DataAccessObject(HasGeneric[T]):
                 setattr(self, prop.key, getattr(obj, prop.key))
 
         # split relationships in relationships by parent and relationships by child
-        all_relationships = mapper.relationships
-        relationships_of_parent = parent_mapper.relationships
-        relationships_of_this_table = [
-            r for r in all_relationships if r not in relationships_of_parent
-        ]
+        relationships_of_parent, relationships_of_this_table = (
+            self.partition_parent_child_relationships(parent_mapper, mapper)
+        )
 
-        for relationship in relationships_of_parent:
-            setattr(self, relationship.key, getattr(parent_dao, relationship.key))
+        # get relationships from parent dao
+        self.get_relationships_from(parent_dao, relationships_of_parent, state)
 
+        # get relationships from the current table
         self.get_relationships_from(obj, relationships_of_this_table, state)
+
+    def partition_parent_child_relationships(
+        self, parent: sqlalchemy.orm.Mapper, child: sqlalchemy.orm.Mapper
+    ) -> Tuple[
+        List[RelationshipProperty[Any]],
+        List[RelationshipProperty[Any]],
+    ]:
+        """
+        Partition the relationships by parent-only and child-only relationships.
+
+        :param parent: The parent mapper to extract relationships from
+        :param child: The child mapper to extract relationships from
+        :return: A tuple of the relationships that are only in the parent and the relationships that are only in the child
+        """
+        all_relationships = child.relationships
+        relationships_of_parent = parent.relationships
+        relationship_names_of_parent = list(
+            map(lambda x: x.key, relationships_of_parent)
+        )
+
+        relationships_of_child = list(
+            filter(
+                lambda x: x.key not in relationship_names_of_parent, all_relationships
+            )
+        )
+        return relationships_of_parent, relationships_of_child
 
     def get_columns_from(self, obj: T, columns: Iterable[Column]) -> None:
         """

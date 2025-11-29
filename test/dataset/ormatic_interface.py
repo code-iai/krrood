@@ -44,6 +44,15 @@ class Base(DeclarativeBase):
 
 
 # Association tables for many-to-many relationships
+parentalternativelymappedmappingdao_entities_association = Table(
+    "parentalternativelymappedmappingdao_entities_association",
+    Base.metadata,
+    Column(
+        "parentalternativelymappedmappingdao_id",
+        ForeignKey("ParentAlternativelyMappedMappingDAO.database_id"),
+    ),
+    Column("customentitydao_id", ForeignKey("CustomEntityDAO.database_id")),
+)
 alternativemappingaggregatordao_entities1_association = Table(
     "alternativemappingaggregatordao_entities1_association",
     Base.metadata,
@@ -292,6 +301,28 @@ class JSONWrapperDAO(Base, DataAccessObject[test.dataset.example_classes.JSONWra
     ] = mapped_column(JSON, nullable=False, use_existing_column=True)
 
 
+class MixinDAO(Base, DataAccessObject[test.dataset.example_classes.Mixin]):
+
+    __tablename__ = "MixinDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    mixin_attribute: Mapped[builtins.str] = mapped_column(
+        String(255), use_existing_column=True
+    )
+
+    polymorphic_type: Mapped[str] = mapped_column(
+        String(255), nullable=False, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_on": "polymorphic_type",
+        "polymorphic_identity": "MixinDAO",
+    }
+
+
 class ParentAlternativelyMappedMappingDAO(
     Base,
     DataAccessObject[test.dataset.example_classes.ParentAlternativelyMappedMapping],
@@ -309,6 +340,12 @@ class ParentAlternativelyMappedMappingDAO(
 
     polymorphic_type: Mapped[str] = mapped_column(
         String(255), nullable=False, use_existing_column=True
+    )
+
+    entities: Mapped[typing.List[CustomEntityDAO]] = relationship(
+        "CustomEntityDAO",
+        secondary="parentalternativelymappedmappingdao_entities_association",
+        cascade="save-update, merge",
     )
 
     __mapper_args__ = {
@@ -400,6 +437,53 @@ class PredicateClassRelationDAO(
         foreign_keys=[target_id],
         post_update=True,
     )
+
+
+class PrimaryBaseDAO(Base, DataAccessObject[test.dataset.example_classes.PrimaryBase]):
+
+    __tablename__ = "PrimaryBaseDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    primary_attribute: Mapped[builtins.str] = mapped_column(
+        String(255), use_existing_column=True
+    )
+
+    polymorphic_type: Mapped[str] = mapped_column(
+        String(255), nullable=False, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_on": "polymorphic_type",
+        "polymorphic_identity": "PrimaryBaseDAO",
+    }
+
+
+class MultipleInheritanceDAO(
+    PrimaryBaseDAO, DataAccessObject[test.dataset.example_classes.MultipleInheritance]
+):
+
+    __tablename__ = "MultipleInheritanceDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(PrimaryBaseDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    mixin_attribute: Mapped[builtins.str] = mapped_column(
+        String(255), use_existing_column=True
+    )
+    extra_attribute: Mapped[builtins.str] = mapped_column(
+        String(255), use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "MultipleInheritanceDAO",
+        "inherit_condition": database_id == PrimaryBaseDAO.database_id,
+    }
 
 
 class SymbolDAO(Base, DataAccessObject[krrood.entity_query_language.predicate.Symbol]):
