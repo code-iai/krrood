@@ -357,7 +357,7 @@ class SymbolicExpression(Generic[T], ABC):
     def __or__(self, other):
         return optimize_or(self, other)
 
-    def __invert__(self):
+    def _invert_(self):
         return Not(self)
 
     def __enter__(self) -> Self:
@@ -574,7 +574,7 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
         else:
             raise NotImplementedError(f"Unknown child type {type(self._child_)}")
 
-    def __invert__(self):
+    def _invert_(self):
         raise UnsupportedNegation(self.__class__)
 
     def _assert_satisfaction_of_quantification_constraints_(
@@ -833,7 +833,7 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
             vars.extend(self._child_._all_variable_instances_)
         return vars
 
-    def __invert__(self):
+    def _invert_(self):
         raise UnsupportedNegation(self.__class__)
 
     @property
@@ -1773,8 +1773,8 @@ class ForAll(QuantifiedConditional):
             return condition_val.is_true
         return False
 
-    def __invert__(self):
-        return Exists(self.variable, self.condition.__invert__())
+    def _invert_(self):
+        return Exists(self.variable, self.condition._invert_())
 
 
 @dataclass(eq=False, repr=False)
@@ -1799,8 +1799,8 @@ class Exists(QuantifiedConditional):
                 seen_var_values.append(var_val.value)
                 yield OperationResult(val.bindings, False, self)
 
-    def __invert__(self):
-        return ForAll(self.variable, self.condition.__invert__())
+    def _invert_(self):
+        return ForAll(self.variable, self.condition._invert_())
 
 
 OperatorOptimizer = Callable[[SymbolicExpression, SymbolicExpression], LogicalOperator]
