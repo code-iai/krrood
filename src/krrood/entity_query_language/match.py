@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Generic, Optional, Type, Dict, Any, List, Union, Self, Iterable
 
-from krrood.entity_query_language.symbolic import ForAll, Exists, DomainMapping
+from krrood.entity_query_language.symbolic import Exists
 
 from .entity import (
     ConditionType,
@@ -448,7 +448,7 @@ def select_all(
 
 def entity_matching(
     type_: Union[Type[T], CanBehaveLikeAVariable[T]], domain: DomainType
-) -> Union[Type[T], CanBehaveLikeAVariable[T], MatchEntity[T]]:
+) -> Union[Type[T], CanBehaveLikeAVariable[T], Match[T]]:
     """
     Same as :py:func:`krrood.entity_query_language.match.match` but with a domain to use for the variable created
      by the match.
@@ -462,7 +462,7 @@ def entity_matching(
 
 def entity_selection(
     type_: Union[Type[T], CanBehaveLikeAVariable[T]], domain: DomainType
-) -> Union[Type[T], CanBehaveLikeAVariable[T], MatchEntity[T]]:
+) -> Union[Type[T], CanBehaveLikeAVariable[T], Select[T]]:
     """
     Same as :py:func:`krrood.entity_query_language.match.entity_matching` but also selecting the variable to be
      included in the result.
