@@ -26,8 +26,9 @@ Lets first define our model and some sample data.
 from dataclasses import dataclass
 from typing_extensions import List
 
-from krrood.entity_query_language.entity import entity, let, an, Symbol
+from krrood.entity_query_language.entity import entity, let, Symbol
 from krrood.entity_query_language.predicate import Predicate, symbolic_function
+from krrood.entity_query_language.quantify_entity import an
 
 
 @dataclass

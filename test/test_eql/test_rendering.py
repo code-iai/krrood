@@ -22,10 +22,10 @@ from ..dataset.semantic_world_like_classes import (
 from krrood.entity_query_language.entity import (
     entity,
     let,
-    an,
     inference,
     and_,
 )
+from krrood.entity_query_language.quantify_entity import an
 from krrood.entity_query_language.conclusion import Add
 
 from krrood.entity_query_language.predicate import HasType

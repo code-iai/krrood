@@ -68,7 +68,7 @@ def symbolic_function(
 
 @dataclass(eq=False)
 class Symbol:
-    """Base class for things that can be described by property descriptors."""
+    """Base class for things that can be cached in the symbol graph."""
 
     def __new__(cls, *args, **kwargs):
         instance = super().__new__(cls)
@@ -143,49 +143,6 @@ class HasTypes(HasType):
     """
     A tuple containing Type objects that are associated with this instance.
     """
-
-
-def extract_selected_variable_and_expression(
-    symbolic_cls: Type,
-    domain: Optional[From] = None,
-    predicate_type: Optional[PredicateType] = None,
-    **kwargs,
-):
-    """
-    Extracts a variable and constructs its expression tree for the given symbolic class.
-
-    This function generates a variable of the specified `symbolic_cls` and uses the
-    provided domain, predicate type, and additional arguments to create its expression
-    tree. The domain can optionally be filtered when iterating through its elements
-    if specified or retrieved from the cache keys associated with the symbolic class.
-
-    :param symbolic_cls: The symbolic class type to be used for variable creation.
-    :param domain: Optional domain to provide constraints for the variable.
-    :param predicate_type: Optional predicate type associated with the variable.
-    :param kwargs: Additional properties to define and construct the variable.
-    :return: A tuple containing the generated variable and its corresponding expression tree.
-    """
-    cache_keys = [symbolic_cls] + recursive_subclasses(symbolic_cls)
-    if not domain and cache_keys:
-        domain = From(
-            (
-                instance
-                for instance in SymbolGraph()._class_to_wrapped_instances[symbolic_cls]
-            )
-        )
-    elif domain and is_iterable(domain.domain):
-        domain.domain = filter(lambda v: isinstance(v, symbolic_cls), domain.domain)
-
-    var = Variable(
-        _name__=symbolic_cls.__name__,
-        _type_=symbolic_cls,
-        _domain_source_=domain,
-        _predicate_type_=predicate_type,
-    )
-
-    expression = properties_to_expression_tree(var, kwargs)
-
-    return var, expression
 
 
 def update_cache(instance: Symbol):

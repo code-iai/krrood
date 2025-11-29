@@ -27,7 +27,8 @@ from dataclasses import dataclass
 
 from typing_extensions import List
 
-from krrood.entity_query_language.entity import entity, let, the, Symbol, an
+from krrood.entity_query_language.entity import entity, let, Symbol
+from krrood.entity_query_language.quantify_entity import an, the
 from krrood.entity_query_language.result_quantification_constraint import AtLeast, AtMost, Exactly, Range
 from krrood.entity_query_language.failures import MultipleSolutionFound, LessThanExpectedNumberOfSolutions, GreaterThanExpectedNumberOfSolutions
 
@@ -81,7 +82,7 @@ Below we reuse the same `World` and `Body` setup from above.
 The world contains exactly two bodies, so all the following examples will evaluate successfully.
 
 ```{code-cell} ipython3
-# Require at least two results
+# Require at least one result
 query = an(
     entity(body := let(Body, domain=world.bodies)),
     quantification=AtLeast(1),
