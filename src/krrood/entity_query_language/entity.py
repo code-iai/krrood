@@ -264,7 +264,7 @@ def not_(operand: SymbolicExpression):
     """
     if not isinstance(operand, SymbolicExpression):
         operand = Literal(operand)
-    return operand.__invert__()
+    return operand._invert_()
 
 
 def contains(container: Union[Iterable, CanBehaveLikeAVariable[T]], item: Any):
