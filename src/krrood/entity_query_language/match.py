@@ -150,7 +150,7 @@ class Match(Generic[T]):
         """
         if self.parent:
             self.parent._update_selected_variables(variable)
-        elif variable not in self.selected_variables:
+        elif hash(variable) not in map(hash, self.selected_variables):
             self.selected_variables.append(variable)
 
     def _get_or_create_variable(self) -> CanBehaveLikeAVariable[T]:
