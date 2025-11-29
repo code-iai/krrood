@@ -420,9 +420,6 @@ class CanBehaveLikeAVariable(SymbolicExpression[T], ABC):
     def __eq__(self, other) -> Comparator:
         return Comparator(self, other, operator.eq)
 
-    def __contains__(self, item) -> Comparator:
-        return Comparator(item, self, operator.contains)
-
     def __ne__(self, other) -> Comparator:
         return Comparator(self, other, operator.ne)
 
