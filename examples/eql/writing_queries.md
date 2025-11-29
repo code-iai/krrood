@@ -35,7 +35,7 @@ This approach ensures that your class definitions remain pure and decoupled from
 outside the explicit symbolic context. Consequently, your classes can focus exclusively on their domain logic, 
 leading to better adherence to the [Single Responsibility Principle](https://realpython.com/solid-principles-python/#single-responsibility-principle-srp).
 
-Here is a query that does work due to the missing `let` statement:
+Here is a query example that finds all bodies in a world whose name starts with "B":
 
 ```{code-cell} ipython3
 from dataclasses import dataclass
