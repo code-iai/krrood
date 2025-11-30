@@ -108,24 +108,24 @@ class Match(Generic[T]):
         :param parent: The parent match if this is a nested match.
         :return:
         """
-        self._update_the_match_fields(variable, parent)
+        self._update_fields(variable, parent)
         for attr_name, attr_assigned_value in self.kwargs.items():
             attr_assignment = AttributeAssignment(
                 attr_name, self.variable, attr_assigned_value
             )
             if isinstance(attr_assigned_value, Select):
                 self._update_selected_variables(attr_assignment.attr)
-                attr_assigned_value.update_selected_variable(attr_assignment.attr)
+                attr_assigned_value._var_ = attr_assignment.attr
             if attr_assignment.is_an_unresolved_match:
                 attr_assignment.resolve(self)
                 self.conditions.extend(attr_assignment.conditions)
             else:
                 condition = (
-                    attr_assignment.infer_the_condition_between_the_attribute_and_its_assigned_value()
+                    attr_assignment.infer_condition_between_attribute_and_assigned_value()
                 )
                 self.conditions.append(condition)
 
-    def _update_the_match_fields(
+    def _update_fields(
         self,
         variable: Optional[CanBehaveLikeAVariable] = None,
         parent: Optional[Match] = None,
@@ -137,10 +137,17 @@ class Match(Generic[T]):
          If None, a new variable will be created.
         :param parent: The parent match if this is a nested match.
         """
-        self.variable = variable if variable else self._get_or_create_variable()
+
+        if variable is not None:
+            self.variable = variable
+        elif self.variable is None:
+            self.variable = let(self.type_, self.domain)
+
         self.parent = parent
+
         if self.is_selected:
             self._update_selected_variables(self.variable)
+
         if not self.type_:
             self.type_ = self.variable._type_
 
@@ -152,15 +159,6 @@ class Match(Generic[T]):
             self.parent._update_selected_variables(variable)
         elif hash(variable) not in map(hash, self.selected_variables):
             self.selected_variables.append(variable)
-
-    def _get_or_create_variable(self) -> CanBehaveLikeAVariable[T]:
-        """
-        Return the existing variable if it exists; otherwise, create a new variable with the given type and domain,
-         then return it.
-        """
-        if self.variable:
-            return self.variable
-        return let(self.type_, self.domain)
 
     @cached_property
     def expression(self) -> QueryObjectDescriptor[T]:
@@ -221,7 +219,7 @@ class AttributeAssignment:
 
         self.conditions.extend(self.assigned_value.conditions)
 
-    def infer_the_condition_between_the_attribute_and_its_assigned_value(
+    def infer_condition_between_attribute_and_assigned_value(
         self,
     ) -> Union[Comparator, Exists]:
         """
@@ -294,7 +292,7 @@ class AttributeAssignment:
         """
         return isinstance(self.assigned_value, Match) and self.assigned_value.universal
 
-    @cached_property
+    @property
     def is_an_unresolved_match(self) -> bool:
         """
         :return: True if the value is an unresolved Match instance, else False.
@@ -356,13 +354,7 @@ class Select(Match[T], Selectable[T]):
     ):
         super()._resolve(variable, parent)
         if not self._var_:
-            self.update_selected_variable(self.variable)
-
-    def update_selected_variable(self, variable: CanBehaveLikeAVariable):
-        """
-        Update the selected variable with the given one.
-        """
-        self._var_ = variable
+            self._var_ = variable
 
     def _evaluate__(
         self,
@@ -390,7 +382,7 @@ def match(
     :param type_: The type of the variable (i.e., The class you want to instantiate).
     :return: The Match instance.
     """
-    return _match_or_select(Match, type_)
+    return entity_matching(type_, None)
 
 
 def match_any(
@@ -421,7 +413,7 @@ def select(
     """
     Equivalent to match(type_) and selecting the variable to be included in the result.
     """
-    return _match_or_select(Select, type_)
+    return entity_selection(type_, None)
 
 
 def select_any(
@@ -457,7 +449,11 @@ def entity_matching(
     :param domain: The domain used for the variable created by the match.
     :return: The MatchEntity instance.
     """
-    return _match_or_select(Match, type_=type_, domain=domain)
+    if isinstance(type_, CanBehaveLikeAVariable):
+        return Match(type_._type_, domain=domain, variable=type_)
+    elif type_ and not isinstance(type_, type):
+        return Match(type_, domain=domain, variable=Literal(type_))
+    return Match(type_, domain=domain)
 
 
 def entity_selection(
@@ -467,7 +463,11 @@ def entity_selection(
     Same as :py:func:`krrood.entity_query_language.match.entity_matching` but also selecting the variable to be
      included in the result.
     """
-    return _match_or_select(Select, type_=type_, domain=domain)
+    if isinstance(type_, CanBehaveLikeAVariable):
+        return Select(type_._type_, domain=domain, variable=type_)
+    elif type_ and not isinstance(type_, type):
+        return Select(type_, domain=domain, variable=Literal(type_))
+    return Select(type_, domain=domain)
 
 
 def _match_or_select(
@@ -487,7 +487,7 @@ def _match_or_select(
         return match_type(type_._type_, domain=domain, variable=type_)
     elif type_ and not isinstance(type_, type):
         return match_type(type_, domain=domain, variable=Literal(type_))
-    return match_type(type_)
+    return match_type(type_, domain=domain)
 
 
 EntityType = Union[SetOf[T], Entity[T], T, Iterable[T], Type[T], Match[T]]

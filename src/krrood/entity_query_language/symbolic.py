@@ -1045,9 +1045,7 @@ class Variable(CanBehaveLikeAVariable[T]):
 
     @property
     def _is_iterable_(self):
-        if self._domain_:
-            return next(iter(self._domain_), None) is not None
-        return False
+        return bool(self._domain_)
 
     @property
     def _plot_color_(self) -> ColorLegend:
@@ -1209,9 +1207,9 @@ class Attribute(DomainMapping):
 
     @property
     def _is_iterable_(self):
-        if self._wrapped_field_:
-            return self._wrapped_field_.is_iterable
-        return False
+        if not self._wrapped_field_:
+            return False
+        return self._wrapped_field_.is_iterable
 
     @cached_property
     def _wrapped_type_(self):
@@ -1251,11 +1249,11 @@ class Attribute(DomainMapping):
 
     @cached_property
     def _wrapped_field_(self) -> Optional[WrappedField]:
-        if self._wrapped_owner_class_ is not None:
-            return self._wrapped_owner_class_._wrapped_field_name_map_.get(
-                self._attr_name_, None
-            )
-        return None
+        if self._wrapped_owner_class_ is None:
+            return None
+        return self._wrapped_owner_class_._wrapped_field_name_map_.get(
+            self._attr_name_, None
+        )
 
     @cached_property
     def _wrapped_owner_class_(self):
@@ -1340,9 +1338,7 @@ class Flatten(DomainMapping):
     @property
     def _is_iterable_(self):
         """
-        Whether the selectable is iterable.
-
-        :return: True if the selectable is iterable, False otherwise.
+        :return: False as Flatten does not preserve the original iterable structure.
         """
         return False
 
