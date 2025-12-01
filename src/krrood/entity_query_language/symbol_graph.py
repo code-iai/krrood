@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import copy
 import os
 import weakref
 from collections import defaultdict
@@ -137,13 +138,14 @@ class WrappedInstance:
         return "red" if self.inferred else "black"
 
     def __eq__(self, other):
-        return self.instance == other.instance
+        return (
+            self.instance == other.instance
+            if self.instance is not None and other.instance is not None
+            else False
+        )
 
     def __hash__(self):
-        if self.instance:
-            return hash(self.instance)
-        else:
-            return id(self.instance)
+        return id(self.instance)
 
 
 @dataclass
@@ -227,7 +229,7 @@ class SymbolGraph(metaclass=SingletonMeta):
         """
         self._instance_index.pop(id(wrapped_instance.instance), None)
         self._class_to_wrapped_instances[wrapped_instance.instance_type].remove(
-            wrapped_instance,
+            wrapped_instance
         )
         self._instance_graph.remove_node(wrapped_instance.index)
 
@@ -246,7 +248,7 @@ class SymbolGraph(metaclass=SingletonMeta):
         yield from (
             instance.instance
             for cls in [type_] + recursive_subclasses(type_)
-            for instance in self._class_to_wrapped_instances[cls]
+            for instance in list(self._class_to_wrapped_instances[cls])
         )
 
     def get_wrapped_instance(self, instance: Any) -> Optional[WrappedInstance]:
