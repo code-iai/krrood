@@ -470,26 +470,6 @@ def entity_selection(
     return Select(type_, domain=domain)
 
 
-def _match_or_select(
-    match_type: Type[Match],
-    type_: Union[Type[T], CanBehaveLikeAVariable[T], Any, None] = None,
-    domain: Optional[DomainType] = None,
-) -> Union[Type[T], CanBehaveLikeAVariable[T], Match[T]]:
-    """
-    Create and return a Match/Select instance that looks for the pattern provided by the type and the
-    keyword arguments.
-
-    :param match_type: The type of the match to create (Match or Select).
-    :param type_: The type of the variable (i.e., The class you want to instantiate).
-    :param domain: The domain used for the variable created by the match.
-    """
-    if isinstance(type_, CanBehaveLikeAVariable):
-        return match_type(type_._type_, domain=domain, variable=type_)
-    elif type_ and not isinstance(type_, type):
-        return match_type(type_, domain=domain, variable=Literal(type_))
-    return match_type(type_, domain=domain)
-
-
 EntityType = Union[SetOf[T], Entity[T], T, Iterable[T], Type[T], Match[T]]
 """
 The possible types for entities.
