@@ -137,13 +137,14 @@ class WrappedInstance:
         return "red" if self.inferred else "black"
 
     def __eq__(self, other):
-        return self.instance == other.instance
+        return (
+            self.instance == other.instance
+            if self.instance is not None and other.instance is not None
+            else False
+        )
 
     def __hash__(self):
-        if self.instance:
-            return hash(self.instance)
-        else:
-            return id(self.instance)
+        return id(self.instance)
 
 
 @dataclass
@@ -215,7 +216,7 @@ class SymbolGraph(metaclass=SingletonMeta):
         wrapped_instance.index = self._instance_graph.add_node(wrapped_instance)
         wrapped_instance._symbol_graph_ = self
         self._instance_index[id(wrapped_instance.instance)] = wrapped_instance
-        self._class_to_wrapped_instances[type(wrapped_instance.instance)].append(
+        self._class_to_wrapped_instances[wrapped_instance.instance_type].append(
             wrapped_instance
         )
 
@@ -246,7 +247,7 @@ class SymbolGraph(metaclass=SingletonMeta):
         yield from (
             instance.instance
             for cls in [type_] + recursive_subclasses(type_)
-            for instance in self._class_to_wrapped_instances[cls]
+            for instance in list(self._class_to_wrapped_instances[cls])
         )
 
     def get_wrapped_instance(self, instance: Any) -> Optional[WrappedInstance]:
