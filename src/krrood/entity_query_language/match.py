@@ -40,6 +40,14 @@ from .utils import is_iterable
 class Match(Generic[T]):
     """
     Construct a query that looks for the pattern provided by the type and the keyword arguments.
+    Example usage where we look for an object of type Drawer with body of type Body that has the name"drawer_1":
+        >>> @dataclass
+        >>> class Body:
+        >>>     name: str
+        >>> @dataclass
+        >>> class Drawer:
+        >>>     body: Body
+        >>> drawer = match(Drawer)(body=match(Body)(name="drawer_1"))
     """
 
     type_: Optional[Type[T]] = None
