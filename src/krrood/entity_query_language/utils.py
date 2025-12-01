@@ -142,17 +142,6 @@ def is_iterable(obj: Any) -> bool:
     )
 
 
-def is_iterable_type(obj: Type) -> bool:
-    """
-    Check if an object type is iterable.
-
-    :param obj: The object to check.
-    """
-    return hasattr(obj, "__iter__") and not issubclass(
-        obj, (str, type, bytes, bytearray)
-    )
-
-
 def make_tuple(value: Any) -> Any:
     """
     Make a tuple from a value.
