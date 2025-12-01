@@ -245,7 +245,9 @@ class AttributeAssignment:
         elif (
             self.attr._is_iterable_
             and self.is_iterable_value
-            and not self.is_a_universal_match
+            and not (
+                isinstance(self.assigned_value, Match) and self.assigned_value.universal
+            )
         ):
             flat_attr = (
                 flatten(self.attr) if not isinstance(self.attr, Flatten) else self.attr
@@ -254,7 +256,7 @@ class AttributeAssignment:
         else:
             condition = self.attr == self.assigned_variable
 
-        if self.is_an_existential_match:
+        if isinstance(self.assigned_value, Match) and self.assigned_value.existential:
             attr = (
                 self.attr if not isinstance(self.attr, Flatten) else self.attr._child_
             )
@@ -283,22 +285,6 @@ class AttributeAssignment:
         if not attr._wrapped_field_:
             raise NoneWrappedFieldError(self.variable._type_, self.attr_name)
         return attr
-
-    @cached_property
-    def is_an_existential_match(self) -> bool:
-        """
-        :return: True if the value is an existential Match, else False.
-        """
-        return (
-            isinstance(self.assigned_value, Match) and self.assigned_value.existential
-        )
-
-    @cached_property
-    def is_a_universal_match(self) -> bool:
-        """
-        :return: True if the value is a universal Match, else False.
-        """
-        return isinstance(self.assigned_value, Match) and self.assigned_value.universal
 
     @property
     def is_an_unresolved_match(self) -> bool:
