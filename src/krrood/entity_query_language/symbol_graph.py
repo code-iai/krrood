@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import copy
 import os
 import weakref
 from collections import defaultdict
@@ -228,7 +229,7 @@ class SymbolGraph(metaclass=SingletonMeta):
         """
         self._instance_index.pop(id(wrapped_instance.instance), None)
         self._class_to_wrapped_instances[wrapped_instance.instance_type].remove(
-            wrapped_instance,
+            wrapped_instance
         )
         self._instance_graph.remove_node(wrapped_instance.index)
 

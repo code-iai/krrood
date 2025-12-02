@@ -28,7 +28,8 @@ from dataclasses import dataclass
 
 from typing_extensions import List
 
-from krrood.entity_query_language.entity import entity, an, let, contains, Symbol
+from krrood.entity_query_language.entity import entity, let, contains, Symbol
+from krrood.entity_query_language.quantify_entity import an
 
 
 @dataclass

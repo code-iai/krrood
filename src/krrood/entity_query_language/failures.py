@@ -120,9 +120,7 @@ class UnSupportedOperand(UnsupportedOperation):
     """
 
     def __post_init__(self):
-        self.message = (
-            f"{self.unsupported_operand} cannot be used as an operand for {self.operation} operations."
-        )
+        self.message = f"{self.unsupported_operand} cannot be used as an operand for {self.operation} operations."
         super().__post_init__()
 
 
@@ -190,4 +188,25 @@ class InvalidEntityType(UsageError):
             f"The entity type {self.invalid_entity_type} is not valid. It must be a subclass of QueryObjectDescriptor class."
             f"e.g. Entity, or SetOf"
         )
+        super().__post_init__()
+
+
+@dataclass
+class ClassDiagramError(DataclassException):
+    """
+    An error related to the class diagram.
+    """
+
+
+@dataclass
+class NoneWrappedFieldError(ClassDiagramError):
+    """
+    Raised when a field of a class is not wrapped by a WrappedField.
+    """
+
+    clazz: Type
+    attr_name: str
+
+    def __post_init__(self):
+        self.message = f"Field '{self.attr_name}' of class '{self.clazz.__name__}' is not wrapped by a WrappedField."
         super().__post_init__()

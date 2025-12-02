@@ -29,12 +29,11 @@ from typing_extensions import List, Dict
 from krrood.entity_query_language.entity import (
     entity,
     set_of,
-    an,
     let,
     flatten,
     Symbol,
 )
-
+from krrood.entity_query_language.quantify_entity import an
 
 @dataclass
 class Body(Symbol):

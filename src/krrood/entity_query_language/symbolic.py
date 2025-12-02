@@ -52,7 +52,7 @@ from .result_quantification_constraint import (
 )
 from .rxnode import RWXNode, ColorLegend
 from .symbol_graph import SymbolGraph
-from .utils import IDGenerator, is_iterable, generate_combinations
+from .utils import IDGenerator, is_iterable, generate_combinations, make_list, make_set
 from ..class_diagrams import ClassRelation
 from ..class_diagrams.class_diagram import Association, WrappedClass
 from ..class_diagrams.failures import ClassIsUnMappedInClassDiagram
@@ -110,6 +110,10 @@ class OperationResult:
     @cached_property
     def is_true(self):
         return not self.is_false
+
+    @property
+    def value(self) -> Optional[HashedValue]:
+        return self.bindings.get(self.operand._id_, None)
 
     def __contains__(self, item):
         return item in self.bindings
@@ -374,13 +378,9 @@ class SymbolicExpression(Generic[T], ABC):
 
 
 @dataclass(eq=False, repr=False)
-class CanBehaveLikeAVariable(SymbolicExpression[T], ABC):
-    """
-    This class adds the monitoring/tracking behaviour on variables that tracks attribute access, calling,
-    and comparison operations.
-    """
+class Selectable(SymbolicExpression[T], ABC):
 
-    _var_: CanBehaveLikeAVariable[T] = field(init=False, default=None)
+    _var_: CanBehaveLikeAVariable = field(init=False, default=None)
     """
     A variable that is used if the child class to this class want to provide a variable to be tracked other than 
     itself, this is specially useful for child classes that holds a variable instead of being a variable and want
@@ -388,12 +388,32 @@ class CanBehaveLikeAVariable(SymbolicExpression[T], ABC):
     For example, this is the case for the ResultQuantifiers & QueryDescriptors that operate on a single selected
     variable.
     """
+
+    @property
+    def _is_iterable_(self):
+        """
+        Whether the selectable is iterable.
+
+        :return: True if the selectable is iterable, False otherwise.
+        """
+        if self._var_ and self._var_ is not self:
+            return self._var_._is_iterable_
+        return False
+
+
+@dataclass(eq=False, repr=False)
+class CanBehaveLikeAVariable(Selectable[T], ABC):
+    """
+    This class adds the monitoring/tracking behaviour on variables that tracks attribute access, calling,
+    and comparison operations.
+    """
+
     _path_: List[ClassRelation] = field(init=False, default_factory=list)
     """
     The path of the variable in the symbol graph as a sequence of relation instances.
     """
 
-    _type_: Type = field(init=False, default=None)
+    _type_: Type[T] = field(init=False, default=None)
     """
     The type of the variable.
     """
@@ -956,6 +976,11 @@ class Variable(CanBehaveLikeAVariable[T]):
         self._eval_parent_ = parent
         sources = sources or {}
         if self._id_ in sources:
+            if (
+                isinstance(self._parent_, LogicalBinaryOperator)
+                or self is self._conditions_root_
+            ):
+                self._is_false_ = not bool(sources[self._id_])
             yield OperationResult(sources, not bool(sources[self._id_]), self)
         elif self._domain_:
             for v in self._domain_:
@@ -1019,6 +1044,10 @@ class Variable(CanBehaveLikeAVariable[T]):
         return variables
 
     @property
+    def _is_iterable_(self):
+        return bool(self._domain_)
+
+    @property
     def _plot_color_(self) -> ColorLegend:
         if self._plot_color__:
             return self._plot_color__
@@ -1042,10 +1071,9 @@ class Literal(Variable[T]):
     ):
         original_data = data
         data = [data]
-        if not is_iterable(data):
-            data = HashedIterable([data])
         if not type_:
-            first_value = next(iter(data), None)
+            original_data_lst = make_list(original_data)
+            first_value = original_data_lst[0] if len(original_data_lst) > 0 else None
             type_ = type(first_value) if first_value else None
         if name is None:
             if type_:
@@ -1177,6 +1205,12 @@ class Attribute(DomainMapping):
             )
         return None
 
+    @property
+    def _is_iterable_(self):
+        if not self._wrapped_field_:
+            return False
+        return self._wrapped_field_.is_iterable
+
     @cached_property
     def _wrapped_type_(self):
         try:
@@ -1215,6 +1249,8 @@ class Attribute(DomainMapping):
 
     @cached_property
     def _wrapped_field_(self) -> Optional[WrappedField]:
+        if self._wrapped_owner_class_ is None:
+            return None
         return self._wrapped_owner_class_._wrapped_field_name_map_.get(
             self._attr_name_, None
         )
@@ -1230,7 +1266,7 @@ class Attribute(DomainMapping):
             return None
 
     def _apply_mapping_(self, value: HashedValue) -> Iterable[HashedValue]:
-        yield HashedValue(id_=value.id_, value=getattr(value.value, self._attr_name_))
+        yield HashedValue(getattr(value.value, self._attr_name_))
 
     @property
     def _name_(self):
@@ -1298,6 +1334,13 @@ class Flatten(DomainMapping):
     @cached_property
     def _name_(self):
         return f"Flatten({self._child_._name_})"
+
+    @property
+    def _is_iterable_(self):
+        """
+        :return: False as Flatten does not preserve the original iterable structure.
+        """
+        return False
 
 
 @dataclass(eq=False, repr=False)
@@ -1407,9 +1450,18 @@ class Comparator(BinaryOperator):
         )
 
     def apply_operation(self, operand_values: OperationResult) -> bool:
-        res = self.operation(
-            operand_values[self.left._id_].value, operand_values[self.right._id_].value
+        left_value, right_value = (
+            operand_values.bindings[self.left._id_],
+            operand_values.bindings[self.right._id_],
         )
+        if (
+            self.operation in [operator.eq, operator.ne]
+            and is_iterable(left_value.value)
+            and is_iterable(right_value.value)
+        ):
+            left_value = HashedValue(make_set(left_value.value))
+            right_value = HashedValue(make_set(right_value.value))
+        res = self.operation(left_value.value, right_value.value)
         self._is_false_ = not res
         operand_values[self._id_] = HashedValue(res)
         return res
@@ -1417,6 +1469,12 @@ class Comparator(BinaryOperator):
     def get_first_second_operands(
         self, sources: Dict[int, HashedValue]
     ) -> Tuple[SymbolicExpression, SymbolicExpression]:
+        left_has_the = any(isinstance(desc, The) for desc in self.left._descendants_)
+        right_has_the = any(isinstance(desc, The) for desc in self.right._descendants_)
+        if left_has_the and not right_has_the:
+            return self.left, self.right
+        elif not left_has_the and right_has_the:
+            return self.right, self.left
         if sources and any(
             v.value._var_._id_ in sources for v in self.right._unique_variables_
         ):
@@ -1730,18 +1788,12 @@ class Exists(QuantifiedConditional):
     ) -> Iterable[OperationResult]:
         sources = sources or {}
         self._eval_parent_ = parent
-        for var_val in self.variable._evaluate__(sources, parent=self):
-            yield from self.evaluate_condition(var_val.bindings)
-
-    def evaluate_condition(
-        self, sources: Dict[int, HashedValue]
-    ) -> Iterable[OperationResult]:
-        # Evaluate the condition under this particular universal value
-        for condition_val in self.condition._evaluate__(sources, parent=self):
-            self._is_false_ = condition_val.is_false
-            if not self._is_false_:
-                yield OperationResult(condition_val.bindings, False, self)
-                break
+        seen_var_values = []
+        for val in self.condition._evaluate__(sources, parent=self):
+            var_val = val[self.variable._id_]
+            if val.is_true and var_val.value not in seen_var_values:
+                seen_var_values.append(var_val.value)
+                yield OperationResult(val.bindings, False, self)
 
     def _invert_(self):
         return ForAll(self.variable, self.condition._invert_())

@@ -18,7 +18,7 @@ try:
 except ImportError:
     Source = None
 
-from typing_extensions import Set, Any, List
+from typing_extensions import Set, Any, List, Type
 
 
 class IDGenerator:

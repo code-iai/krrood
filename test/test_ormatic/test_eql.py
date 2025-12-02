@@ -22,14 +22,13 @@ from ..dataset.ormatic_interface import (
 )
 from krrood.entity_query_language.entity import (
     let,
-    an,
     entity,
-    the,
     contains,
     and_,
     or_,
     in_,
 )
+from krrood.entity_query_language.quantify_entity import an, the
 from krrood.ormatic.dao import to_dao
 from krrood.ormatic.eql_interface import eql_to_sql
 

@@ -1,9 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from functools import cached_property
-
-
 from .hashed_data import T
 from .symbol_graph import SymbolGraph
 from .utils import is_iterable
@@ -18,21 +14,17 @@ from typing_extensions import (
     Optional,
     Union,
     Iterable,
-    Dict,
-    Generic,
     Type,
     Tuple,
     List,
     Callable,
-    TypeVar,
+    TYPE_CHECKING,
 )
 
 from .symbolic import (
     SymbolicExpression,
     Entity,
     SetOf,
-    The,
-    An,
     AND,
     Comparator,
     chained_logic,
@@ -44,78 +36,21 @@ from .symbolic import (
     ForAll,
     Exists,
     Literal,
-    ResultQuantifier,
 )
-from .result_quantification_constraint import ResultQuantificationConstraint
 
 from .predicate import (
     Predicate,
     # type: ignore
     Symbol,  # type: ignore
-    HasType,
 )
+
+if TYPE_CHECKING:
+    pass
 
 ConditionType = Union[SymbolicExpression, bool, Predicate]
 """
 The possible types for conditions.
 """
-
-EntityType = Union[
-    SetOf[T], Entity[T], T, Iterable[T], Type[T]
-]  # include Match[T] after moving match to a module @bass
-"""
-The possible types for entities.
-"""
-
-
-def an(
-    entity_: EntityType,
-    quantification: Optional[ResultQuantificationConstraint] = None,
-) -> Union[An[T], T]:
-    """
-    Select a single element satisfying the given entity description.
-
-    :param entity_: An entity or a set expression to quantify over.
-    :param quantification: Optional quantification constraint.
-    :return: A quantifier representing "an" element.
-    :rtype: An[T]
-    """
-    return _quantify_entity(An, entity_, _quantification_constraint_=quantification)
-
-
-a = an
-"""
-This is an alias to accommodate for words not starting with vowels.
-"""
-
-
-def the(
-    entity_: EntityType,
-) -> Union[The[T], T]:
-    """
-    Select the unique element satisfying the given entity description.
-
-    :param entity_: An entity or a set expression to quantify over.
-    :return: A quantifier representing "an" element.
-    :rtype: The[T]
-    """
-    return _quantify_entity(The, entity_)
-
-
-def _quantify_entity(
-    quantifier: Type[ResultQuantifier], entity_: EntityType, **quantifier_kwargs
-) -> Union[ResultQuantifier[T], T]:
-    """
-    Apply the given quantifier to the given entity.
-
-    :param quantifier: The quantifier to apply.
-    :param entity_: The entity to quantify.
-    :param quantifier_kwargs: Keyword arguments to pass to the quantifier.
-    :return: The quantified entity.
-    """
-    if isinstance(entity_, Match):
-        entity_ = entity_.expression
-    return quantifier(entity_, **quantifier_kwargs)
 
 
 def entity(
@@ -267,7 +202,9 @@ def not_(operand: SymbolicExpression):
     return operand._invert_()
 
 
-def contains(container: Union[Iterable, CanBehaveLikeAVariable[T]], item: Any):
+def contains(
+    container: Union[Iterable, CanBehaveLikeAVariable[T]], item: Any
+) -> Comparator:
     """
     Check whether a container contains an item.
 
@@ -345,111 +282,3 @@ def inference(
     return lambda **kwargs: Variable(
         _type_=type_, _name__=type_.__name__, _kwargs_=kwargs, _is_inferred_=True
     )
-
-
-@dataclass
-class Match(Generic[T]):
-    """
-    Construct a query that looks for the pattern provided by the type and the keyword arguments.
-    """
-
-    type_: Type[T]
-    """
-    The type of the variable.
-    """
-    kwargs: Dict[str, Any]
-    """
-    The keyword arguments to match against.
-    """
-    variable: CanBehaveLikeAVariable[T] = field(init=False)
-    """
-    The created variable from the type and kwargs.
-    """
-    conditions: List[ConditionType] = field(init=False, default_factory=list)
-    """
-    The conditions that define the match.
-    """
-
-    def _resolve(self, variable: Optional[CanBehaveLikeAVariable] = None):
-        """
-        Resolve the match by creating the variable and conditions expressions.
-
-        :param variable: An optional pre-existing variable to use for the match; if not provided, a new variable will be created.
-        :return:
-        """
-        self.variable = variable if variable else self._create_variable()
-        for k, v in self.kwargs.items():
-            attr = getattr(self.variable, k)
-            if isinstance(v, Match):
-                v._resolve(attr)
-                self.conditions.append(HasType(attr, v.type_))
-                self.conditions.extend(v.conditions)
-            else:
-                self.conditions.append(attr == v)
-
-    def _create_variable(self) -> Variable[T]:
-        """
-        Create a variable with the given type.
-        """
-        return let(self.type_, None)
-
-    @cached_property
-    def expression(self) -> Entity[T]:
-        """
-        Return the entity expression corresponding to the match query.
-        """
-        self._resolve()
-        return entity(self.variable, *self.conditions)
-
-
-@dataclass
-class MatchEntity(Match[T]):
-    """
-    A match that can also take a domain and should be used as the outermost match in a nested match statement.
-    This is because the inner match statements derive their domain from the outer match as they are basically attributes
-    of the outer match variable.
-    """
-
-    domain: DomainType
-    """
-    The domain to use for the variable created by the match.
-    """
-
-    def _create_variable(self) -> Variable[T]:
-        """
-        Create a variable with the given type and domain.
-        """
-        return let(self.type_, self.domain)
-
-
-def match(type_: Type[T]) -> Union[Type[T], Callable[..., Match[T]]]:
-    """
-    This returns a factory function that creates a Match instance that looks for the pattern provided by the type and the
-    keyword arguments.
-
-    :param type_: The type of the variable (i.e., The class you want to instantiate).
-    :return: The factory function for creating the match query.
-    """
-
-    def match_factory(**kwargs) -> Match[T]:
-        return Match(type_, kwargs)
-
-    return match_factory
-
-
-def entity_matching(
-    type_: Type[T], domain: DomainType
-) -> Union[Type[T], Callable[..., MatchEntity[T]]]:
-    """
-    Same as :py:func:`krrood.entity_query_language.entity.match` but with a domain to use for the variable created
-     by the match.
-
-    :param type_: The type of the variable (i.e., The class you want to instantiate).
-    :param domain: The domain used for the variable created by the match.
-    :return: The factory function for creating the match query.
-    """
-
-    def match_factory(**kwargs) -> MatchEntity[T]:
-        return MatchEntity(type_, kwargs, domain)
-
-    return match_factory
