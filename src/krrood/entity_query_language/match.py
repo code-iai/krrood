@@ -249,18 +249,12 @@ class AttributeAssignment:
                 isinstance(self.assigned_value, Match) and self.assigned_value.universal
             )
         ):
-            flat_attr = (
-                flatten(self.attr) if not isinstance(self.attr, Flatten) else self.attr
-            )
-            condition = contains(self.assigned_variable, flat_attr)
+            condition = contains(self.assigned_variable, flatten(self.attr))
         else:
             condition = self.attr == self.assigned_variable
 
         if isinstance(self.assigned_value, Match) and self.assigned_value.existential:
-            attr = (
-                self.attr if not isinstance(self.attr, Flatten) else self.attr._child_
-            )
-            condition = exists(attr, condition)
+            condition = exists(self.attr, condition)
 
         return condition
 
@@ -347,6 +341,7 @@ class Select(Match[T], Selectable[T]):
         parent: Optional[Match] = None,
     ):
         super()._resolve(variable, parent)
+        variable = variable or self.variable
         if not self._var_:
             self._var_ = variable
 
