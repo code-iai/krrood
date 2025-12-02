@@ -217,7 +217,7 @@ class SymbolGraph(metaclass=SingletonMeta):
         wrapped_instance.index = self._instance_graph.add_node(wrapped_instance)
         wrapped_instance._symbol_graph_ = self
         self._instance_index[id(wrapped_instance.instance)] = wrapped_instance
-        self._class_to_wrapped_instances[type(wrapped_instance.instance)].append(
+        self._class_to_wrapped_instances[wrapped_instance.instance_type].append(
             wrapped_instance
         )
 
